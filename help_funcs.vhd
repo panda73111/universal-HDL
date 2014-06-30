@@ -14,6 +14,7 @@ package help_funcs is
   function "&"(ul, ur : unsigned) return unsigned;
   function "&"(ul, ur : unsigned) return std_ulogic_vector;
   function int(v : std_ulogic_vector) return integer;
+  function uns(v : std_ulogic_vector) return unsigned;
   function stdulv(n, l : natural) return std_ulogic_vector;
   function stdulv(u : unsigned) return std_ulogic_vector;
   function stdulv(c : character) return std_ulogic_vector; -- ASCII to 8 bit binary
@@ -68,6 +69,11 @@ package body help_funcs is
     return to_integer(unsigned(v));
   end function;
   
+  function uns(v : std_ulogic_vector) return unsigned is
+  begin
+    return unsigned(v);
+  end function;
+  
   function stdulv(n, l : natural) return std_ulogic_vector is
   begin
     return std_ulogic_vector(to_unsigned(n, l));
@@ -96,13 +102,13 @@ package body help_funcs is
   function log2 (val: INTEGER) return natural is
     variable res : natural;
   begin
-        for i in 0 to 31 loop
-            if (val <= (2**i)) then
-                res := i;
-                exit;
-            end if;
-        end loop;
-        return res;
+    for i in 0 to 31 loop
+      if (val <= (2**i)) then
+        res := i;
+        exit;
+      end if;
+    end loop;
+    return res;
   end function Log2;
   
 end help_funcs;
