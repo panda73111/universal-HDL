@@ -48,6 +48,7 @@ package help_funcs is
   function stdulv(u : unsigned) return std_ulogic_vector;
   function stdulv(c : character) return std_ulogic_vector; -- ASCII to 8 bit binary
   function log2(val: INTEGER) return natural;
+  function sel(c : boolean; r1, r2 : natural) return natural;
   
 end help_funcs;
 
@@ -297,5 +298,14 @@ package body help_funcs is
     end loop;
     return res;
   end function Log2;
+  
+  function sel(c : boolean; r1, r2 : natural) return natural is
+  begin
+    if c then
+      return r1;
+    else
+      return r2;
+    end if;
+  end function;
   
 end help_funcs;
