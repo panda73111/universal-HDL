@@ -5,8 +5,8 @@ library IEEE;
   
 package help_funcs is
   
-  function max(l, r : integer) return integer;
-  function min(l, r : integer) return integer;
+  function max(l, r : natural) return natural;
+  function min(l, r : natural) return natural;
   function "+"(v : std_ulogic_vector; n : natural) return std_ulogic_vector;
   function "+"(v : std_ulogic_vector; u : unsigned) return std_ulogic_vector;
   function "+"(u : unsigned; v : std_ulogic_vector) return std_ulogic_vector;
@@ -15,6 +15,10 @@ package help_funcs is
   function "-"(v : std_ulogic_vector; u : unsigned) return std_ulogic_vector;
   function "-"(u : unsigned; v : std_ulogic_vector) return std_ulogic_vector;
   function "-"(vl, vr : std_ulogic_vector) return std_ulogic_vector;
+  function "*"(v : std_ulogic_vector; n : natural) return std_ulogic_vector;
+  function "*"(v : std_ulogic_vector; u : unsigned) return std_ulogic_vector;
+  function "*"(u : unsigned; v : std_ulogic_vector) return std_ulogic_vector;
+  function "*"(vl, vr : std_ulogic_vector) return std_ulogic_vector;
   function "="(v : std_ulogic_vector; n : natural) return boolean;
   function "="(n : natural; v : std_ulogic_vector) return boolean;
   function "="(u : unsigned; n : natural) return boolean;
@@ -27,18 +31,22 @@ package help_funcs is
   function ">"(u : unsigned; n : natural) return boolean;
   function ">"(n : natural; v : std_ulogic_vector) return boolean;
   function ">"(u : unsigned; v : std_ulogic_vector) return boolean;
+  function ">"(vl, vr : std_ulogic_vector) return boolean;
   function "<"(v : std_ulogic_vector; n : natural) return boolean;
   function "<"(u : unsigned; n : natural) return boolean;
   function "<"(n : natural; v : std_ulogic_vector) return boolean;
   function "<"(u : unsigned; v : std_ulogic_vector) return boolean;
+  function "<"(vl, vr : std_ulogic_vector) return boolean;
   function ">="(v : std_ulogic_vector; n : natural) return boolean;
   function ">="(u : unsigned; n : natural) return boolean;
   function ">="(n : natural; v : std_ulogic_vector) return boolean;
   function ">="(u : unsigned; v : std_ulogic_vector) return boolean;
+  function ">="(vl, vr : std_ulogic_vector) return boolean;
   function "<="(v : std_ulogic_vector; n : natural) return boolean;
   function "<="(u : unsigned; n : natural) return boolean;
   function "<="(n : natural; v : std_ulogic_vector) return boolean;
   function "<="(u : unsigned; v : std_ulogic_vector) return boolean;
+  function "<="(vl, vr : std_ulogic_vector) return boolean;
   function "&"(ul, ur : unsigned) return std_ulogic_vector;
   function int(v : std_ulogic_vector) return integer;
   function int(u : unsigned) return integer;
@@ -54,7 +62,7 @@ end help_funcs;
 
 package body help_funcs is
   
-  function max(l, r : integer) return integer is
+  function max(l, r : natural) return natural is
   begin
     if l > r then
       return l;
@@ -63,7 +71,7 @@ package body help_funcs is
     end if;
   end function;
 
-  function min(l, r : integer) return integer is
+  function min(l, r : natural) return natural is
   begin
     if l < r then
       return l;
@@ -110,6 +118,26 @@ package body help_funcs is
   function "-"(vl, vr : std_ulogic_vector) return std_ulogic_vector is
   begin
     return stdulv(uns(vl) - uns(vr));
+  end function;
+  
+  function "*"(v : std_ulogic_vector; n : natural) return std_ulogic_vector is
+  begin
+    return std_ulogic_vector(uns(v) * to_unsigned(n, v'length));
+  end function;
+  
+  function "*"(v : std_ulogic_vector; u : unsigned) return std_ulogic_vector is
+  begin
+    return stdulv(uns(v) * u);
+  end function;
+  
+  function "*"(u : unsigned; v : std_ulogic_vector) return std_ulogic_vector is
+  begin
+    return stdulv(u * uns(v));
+  end function;
+  
+  function "*"(vl, vr : std_ulogic_vector) return std_ulogic_vector is
+  begin
+    return stdulv(uns(vl) * uns(vr));
   end function;
   
   function "="(v : std_ulogic_vector; n : natural) return boolean is
@@ -172,6 +200,11 @@ package body help_funcs is
     return u > uns(v);
   end function;
   
+  function ">"(vl, vr : std_ulogic_vector) return boolean is
+  begin
+    return uns(vl) > uns(vr);
+  end function;
+  
   function "<"(v : std_ulogic_vector; n : natural) return boolean is
   begin
     return uns(v) < to_unsigned(n, v'length);
@@ -190,6 +223,11 @@ package body help_funcs is
   function "<"(u : unsigned; v : std_ulogic_vector) return boolean is
   begin
     return u < uns(v);
+  end function;
+  
+  function "<"(vl, vr : std_ulogic_vector) return boolean is
+  begin
+    return uns(vl) < uns(vr);
   end function;
   
   function ">="(v : std_ulogic_vector; n : natural) return boolean is
@@ -212,6 +250,11 @@ package body help_funcs is
     return u >= uns(v);
   end function;
   
+  function ">="(vl, vr : std_ulogic_vector) return boolean is
+  begin
+    return uns(vl) >= uns(vr);
+  end function;
+  
   function "<="(v : std_ulogic_vector; n : natural) return boolean is
   begin
     return uns(v) <= to_unsigned(n, v'length);
@@ -230,6 +273,11 @@ package body help_funcs is
   function "<="(u : unsigned; v : std_ulogic_vector) return boolean is
   begin
     return u <= uns(v);
+  end function;
+  
+  function "<="(vl, vr : std_ulogic_vector) return boolean is
+  begin
+    return uns(vl) <= uns(vr);
   end function;
   
   function "&"(ul, ur : unsigned) return unsigned is
@@ -287,7 +335,7 @@ package body help_funcs is
     return ret;
   end function;
   
-  function log2 (val: INTEGER) return natural is
+  function log2(val: INTEGER) return natural is
     variable res : natural;
   begin
     for i in 0 to 31 loop

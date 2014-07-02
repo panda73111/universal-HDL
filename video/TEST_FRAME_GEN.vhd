@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.help_funcs.all;
 
 entity test_camera is
     generic (
@@ -25,15 +26,6 @@ entity test_camera is
 end test_camera;
 
 architecture rtl of test_camera is
-    
-    function max(nl, nr : natural) return natural is
-    begin
-        if nl>nr then
-            return nl;
-        else
-            return nr;
-        end if;
-    end function;
     
     constant MAX_BITS   : natural := max(R_BITS, max(G_BITS, B_BITS));
     constant GRAD_LIMIT : natural := (2**MAX_BITS)-1;
@@ -64,12 +56,6 @@ architecture rtl of test_camera is
     signal pausing              : std_ulogic := '1';
     
     signal vsync_pre, hsync_pre : std_ulogic := '0';
-    
-    function isEven (i : integer) return boolean is
-        variable t  : std_ulogic_vector(31 downto 0) := std_ulogic_vector(to_unsigned(i, 32));
-    begin
-        return t(0)='0';
-    end isEven;
     
 begin
     
