@@ -31,21 +31,25 @@ package help_funcs is
   function ">"(u : unsigned; n : natural) return boolean;
   function ">"(n : natural; v : std_ulogic_vector) return boolean;
   function ">"(u : unsigned; v : std_ulogic_vector) return boolean;
+  function ">"(v : std_ulogic_vector; u : unsigned) return boolean;
   function ">"(vl, vr : std_ulogic_vector) return boolean;
   function "<"(v : std_ulogic_vector; n : natural) return boolean;
   function "<"(u : unsigned; n : natural) return boolean;
   function "<"(n : natural; v : std_ulogic_vector) return boolean;
   function "<"(u : unsigned; v : std_ulogic_vector) return boolean;
+  function "<"(v : std_ulogic_vector; u : unsigned) return boolean;
   function "<"(vl, vr : std_ulogic_vector) return boolean;
   function ">="(v : std_ulogic_vector; n : natural) return boolean;
   function ">="(u : unsigned; n : natural) return boolean;
   function ">="(n : natural; v : std_ulogic_vector) return boolean;
   function ">="(u : unsigned; v : std_ulogic_vector) return boolean;
+  function ">="(v : std_ulogic_vector; u : unsigned) return boolean;
   function ">="(vl, vr : std_ulogic_vector) return boolean;
   function "<="(v : std_ulogic_vector; n : natural) return boolean;
   function "<="(u : unsigned; n : natural) return boolean;
   function "<="(n : natural; v : std_ulogic_vector) return boolean;
   function "<="(u : unsigned; v : std_ulogic_vector) return boolean;
+  function "<="(v : std_ulogic_vector; u : unsigned) return boolean;
   function "<="(vl, vr : std_ulogic_vector) return boolean;
   function "&"(ul, ur : unsigned) return std_ulogic_vector;
   function int(v : std_ulogic_vector) return integer;
@@ -57,6 +61,7 @@ package help_funcs is
   function stdulv(c : character) return std_ulogic_vector; -- ASCII to 8 bit binary
   function log2(val: INTEGER) return natural;
   function sel(c : boolean; r1, r2 : natural) return natural;
+  function arith_mean(vl, vr : std_ulogic_vector) return std_ulogic_vector;
   
 end help_funcs;
 
@@ -200,6 +205,11 @@ package body help_funcs is
     return u > uns(v);
   end function;
   
+  function ">"(v : std_ulogic_vector; u : unsigned) return boolean is
+  begin
+    return uns(v) > u;
+  end function;
+  
   function ">"(vl, vr : std_ulogic_vector) return boolean is
   begin
     return uns(vl) > uns(vr);
@@ -223,6 +233,11 @@ package body help_funcs is
   function "<"(u : unsigned; v : std_ulogic_vector) return boolean is
   begin
     return u < uns(v);
+  end function;
+  
+  function "<"(v : std_ulogic_vector; u : unsigned) return boolean is
+  begin
+    return uns(v) < u;
   end function;
   
   function "<"(vl, vr : std_ulogic_vector) return boolean is
@@ -250,6 +265,11 @@ package body help_funcs is
     return u >= uns(v);
   end function;
   
+  function ">="(v : std_ulogic_vector; u : unsigned) return boolean is
+  begin
+    return uns(v) >= u;
+  end function;
+  
   function ">="(vl, vr : std_ulogic_vector) return boolean is
   begin
     return uns(vl) >= uns(vr);
@@ -273,6 +293,11 @@ package body help_funcs is
   function "<="(u : unsigned; v : std_ulogic_vector) return boolean is
   begin
     return u <= uns(v);
+  end function;
+  
+  function "<="(v : std_ulogic_vector; u : unsigned) return boolean is
+  begin
+    return uns(v) <= u;
   end function;
   
   function "<="(vl, vr : std_ulogic_vector) return boolean is
@@ -345,7 +370,7 @@ package body help_funcs is
       end if;
     end loop;
     return res;
-  end function Log2;
+  end function;
   
   function sel(c : boolean; r1, r2 : natural) return natural is
   begin
@@ -355,5 +380,16 @@ package body help_funcs is
       return r2;
     end if;
   end function;
+  
+  function arith_mean(vl, vr : std_ulogic_vector) return std_ulogic_vector is
+    constant bits   : integer := max(vl'length, vr'length);
+    variable ul, ur : unsigned(bits downto 0);
+    variable sum    : std_ulogic_vector(bits downto 0);
+  begin
+    ul  := resize(uns(vl), bits+1);
+    ur  := resize(uns(vr), bits+1);
+    sum := stdulv(ul+ur);
+    return sum(bits downto 1); -- divide by 2
+  end arith_mean;
   
 end help_funcs;
