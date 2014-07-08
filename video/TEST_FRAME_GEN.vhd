@@ -165,7 +165,7 @@ begin
                 pausing     <= '1';
                 if cur_reg.y=height_i-1 then
                     -- end of frame
-                    if frame_count>=(FRAME_STEP+1)*DIF_FRAMES then
+                    if frame_count>=(FRAME_STEP+1)*DIF_FRAMES-1 then
                         frame_count <= 0;
                     else
                         frame_count <= frame_count+1;
