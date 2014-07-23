@@ -27,7 +27,8 @@ entity ISERDES2_CLK_MAN is
         DIVISOR3        : natural range 1 to 128 := 1;
         DIVISOR4        : natural range 1 to 128 := 1;
         DIVISOR5        : natural range 1 to 128 := 1;
-        DATA_CLK_SELECT : natural range 1 to 5:= 1
+        DATA_CLK_SELECT : natural range 0 to 5:= 0;
+        IO_CLK_SELECT   : natural range 0 to 5:= 1
     );
     port (
         CLK_IN          : in  std_ulogic;
@@ -48,7 +49,7 @@ architecture rtl of ISERDES2_CLK_MAN is
     constant divisors   : divs_arr_type :=
         (DIVISOR0, DIVISOR1, DIVISOR2,
         DIVISOR3, DIVISOR4, DIVISOR5);
-    constant bufpll_divide  : natural := divisors(DATA_CLK_SELECT);
+    constant bufpll_divide  : natural := divisors(DATA_CLK_SELECT) / divisors(IO_CLK_SELECT);
         
     signal clk_in_buf       : std_ulogic := '0';
     signal pll_base_clkfb   : std_ulogic := '0';
@@ -65,6 +66,7 @@ architecture rtl of ISERDES2_CLK_MAN is
     signal clk4_buf : std_ulogic := '0';
     signal clk5     : std_ulogic := '0';
     signal clk5_buf : std_ulogic := '0';
+    signal bufpll_ioclk_in  : std_ulogic := '0';
     signal bufpll_ioclk_out : std_ulogic := '0';
     signal bufpll_gclk_in   : std_ulogic := '0';
 begin
@@ -129,6 +131,16 @@ begin
             clk5_buf when 5,
             'U' when others;
     
+    with IO_CLK_SELECT select
+        bufpll_ioclk_in <=
+            clk0 when 0,
+            clk1 when 1,
+            clk2 when 2,
+            clk3 when 3,
+            clk4 when 4,
+            clk5 when 5,
+            'U' when others;
+    
     BUFPLL_inst : BUFPLL
         generic map (
             DIVIDE      => bufpll_divide,
@@ -136,7 +148,7 @@ begin
         )
         port map (
             GCLK            => bufpll_gclk_in,
-            PLLIN           => clk0,
+            PLLIN           => bufpll_ioclk_in,
             LOCKED          => pll_base_locked,
             LOCK            => IOCLK_LOCKED,
             IOCLK           => bufpll_ioclk_out,
