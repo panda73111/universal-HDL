@@ -278,16 +278,15 @@ package body txt_util is
 
    -- converts a std_ulogic_vector into a hex string.
    function hstr(slv: std_ulogic_vector) return string is
-       constant hexlen: integer := slv'length / 4 * 3 / 2 - 1;
+       -- round slv to the next multiple of 4, plus spaces
+       constant hexlen: integer := (slv'length + 3) / 4 * 3 / 2;
+       variable padded_slv  : std_ulogic_vector((slv'length + 3) / 4 * 4 - 1 downto 0) := (others => '0');
        variable hex : string(1 to hexlen);
        variable ch_i  : integer range 1 to hexlen;
      begin
-      assert slv'length mod 4 = 0
-        report "hstr(): vector length is not dividable by 4!"
-        severity warning;
-        
-       for i in slv'length / 4 downto 1 loop
-         case slv(i * 4 - 1 downto i * 4 - 4) is
+       padded_slv(slv'high downto slv'low)    := slv;
+       for i in hexlen downto 1 loop
+         case padded_slv(i * 4 - 1 downto i * 4 - 4) is
            when "0000" => hex(ch_i) := '0';
            when "0001" => hex(ch_i) := '1';
            when "0010" => hex(ch_i) := '2';
@@ -319,19 +318,18 @@ package body txt_util is
      end hstr;
     
      function hstr(slv: std_ulogic_vector; spaced: boolean) return string is
-       constant hexlen: integer := slv'length / 4;
+       -- round slv to the next multiple of 4, plus spaces
+       constant hexlen: integer := (slv'length + 3) / 4;
+       variable padded_slv  : std_ulogic_vector(hexlen * 4 - 1 downto 0) := (others => '0');
        variable hex : string(1 to hexlen);
        variable ch_i  : integer range 1 to hexlen;
      begin
       if spaced then
         return hstr(slv);
       else
-        assert slv'length mod 4 = 0
-          report "hstr(): vector length is not dividable by 4!"
-          severity warning;
-          
-         for i in slv'length / 4 downto 1 loop
-           case slv(i * 4 - 1 downto i * 4 - 4) is
+         padded_slv(slv'high downto slv'low)    := slv;
+         for i in hexlen downto 1 loop
+           case padded_slv(i * 4 - 1 downto i * 4 - 4) is
              when "0000" => hex(ch_i) := '0';
              when "0001" => hex(ch_i) := '1';
              when "0010" => hex(ch_i) := '2';
