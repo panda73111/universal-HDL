@@ -37,6 +37,9 @@ package txt_util is
     -- convert std_ulogic_vector into a string in hex format
     function hstr(slv: std_ulogic_vector) return string;
     function hstr(slv: std_ulogic_vector; spaced: boolean) return string;
+    
+    -- repeat a character
+    function str(c: character; n: natural) return string;
 
     -- functions to manipulate strings
     -----------------------------------
@@ -273,91 +276,72 @@ package body txt_util is
     return str(int, 10) ;
 
    end str;
-
-
-
-   -- converts a std_ulogic_vector into a hex string.
-   function hstr(slv: std_ulogic_vector) return string is
-       -- round slv to the next multiple of 4, plus spaces
-       constant hexlen: integer := (slv'length + 3) / 4 * 3 / 2;
-       variable padded_slv  : std_ulogic_vector((slv'length + 3) / 4 * 4 - 1 downto 0) := (others => '0');
-       variable hex : string(1 to hexlen);
-       variable ch_i  : integer range 1 to hexlen;
-     begin
-       padded_slv(slv'high downto slv'low)    := slv;
-       for i in hexlen downto 1 loop
-         case padded_slv(i * 4 - 1 downto i * 4 - 4) is
-           when "0000" => hex(ch_i) := '0';
-           when "0001" => hex(ch_i) := '1';
-           when "0010" => hex(ch_i) := '2';
-           when "0011" => hex(ch_i) := '3';
-           when "0100" => hex(ch_i) := '4';
-           when "0101" => hex(ch_i) := '5';
-           when "0110" => hex(ch_i) := '6';
-           when "0111" => hex(ch_i) := '7';
-           when "1000" => hex(ch_i) := '8';
-           when "1001" => hex(ch_i) := '9';
-           when "1010" => hex(ch_i) := 'A';
-           when "1011" => hex(ch_i) := 'B';
-           when "1100" => hex(ch_i) := 'C';
-           when "1101" => hex(ch_i) := 'D';
-           when "1110" => hex(ch_i) := 'E';
-           when "1111" => hex(ch_i) := 'F';
-           when "ZZZZ" => hex(ch_i) := 'z';
-           when "UUUU" => hex(ch_i) := 'u';
-           when "XXXX" => hex(ch_i) := 'x';
-           when others => hex(ch_i) := '?';
-         end case;
-         ch_i := ch_i + 1;
-         if ch_i mod 3 = 0 and ch_i /= hexlen + 1 then
-           hex(ch_i) := ' ';
-           ch_i := ch_i + 1;
-         end if;
-       end loop;
-       return hex;
-     end hstr;
     
-     function hstr(slv: std_ulogic_vector; spaced: boolean) return string is
-       -- round slv to the next multiple of 4, plus spaces
-       constant hexlen: integer := (slv'length + 3) / 4;
-       variable padded_slv  : std_ulogic_vector(hexlen * 4 - 1 downto 0) := (others => '0');
-       variable hex : string(1 to hexlen);
-       variable ch_i  : integer range 1 to hexlen;
-     begin
-      if spaced then
-        return hstr(slv);
-      else
-         padded_slv(slv'high downto slv'low)    := slv;
-         for i in hexlen downto 1 loop
-           case padded_slv(i * 4 - 1 downto i * 4 - 4) is
-             when "0000" => hex(ch_i) := '0';
-             when "0001" => hex(ch_i) := '1';
-             when "0010" => hex(ch_i) := '2';
-             when "0011" => hex(ch_i) := '3';
-             when "0100" => hex(ch_i) := '4';
-             when "0101" => hex(ch_i) := '5';
-             when "0110" => hex(ch_i) := '6';
-             when "0111" => hex(ch_i) := '7';
-             when "1000" => hex(ch_i) := '8';
-             when "1001" => hex(ch_i) := '9';
-             when "1010" => hex(ch_i) := 'A';
-             when "1011" => hex(ch_i) := 'B';
-             when "1100" => hex(ch_i) := 'C';
-             when "1101" => hex(ch_i) := 'D';
-             when "1110" => hex(ch_i) := 'E';
-             when "1111" => hex(ch_i) := 'F';
-             when "ZZZZ" => hex(ch_i) := 'z';
-             when "UUUU" => hex(ch_i) := 'u';
-             when "XXXX" => hex(ch_i) := 'x';
-             when others => hex(ch_i) := '?';
-           end case;
-           ch_i := ch_i + 1;
-         end loop;
-         return hex;
-       end if;
-     end hstr;
+    function hstr(slv: std_ulogic_vector) return string is
+    begin
+        return hstr(slv, true);
+    end hstr;
 
-
+    -- converts a std_ulogic_vector into a hex string.
+    function hstr(slv: std_ulogic_vector; spaced: boolean) return string is
+        constant unsp_hexlen    : natural := (slv'length + 3) / 4;
+        constant sp_hexlen      : natural := unsp_hexlen + (slv'length - 1) / 8;
+        variable hexlen         : natural range 1 to sp_hexlen;
+        -- round slv to the next multiple of 4
+        variable padded_slv     : std_ulogic_vector(unsp_hexlen * 4 - 1 downto 0) := (others => '0');
+        variable hex            : string(1 to sp_hexlen);
+        variable ch_i           : natural range 1 to sp_hexlen;
+    begin
+        hexlen  := unsp_hexlen;
+        if spaced then
+            hexlen  := sp_hexlen;
+        end if;
+        padded_slv(slv'high downto slv'low) := slv;
+        for i in unsp_hexlen downto 1 loop
+            case padded_slv(i * 4 - 1 downto i * 4 - 4) is
+                when "0000" => hex(ch_i) := '0';
+                when "0001" => hex(ch_i) := '1';
+                when "0010" => hex(ch_i) := '2';
+                when "0011" => hex(ch_i) := '3';
+                when "0100" => hex(ch_i) := '4';
+                when "0101" => hex(ch_i) := '5';
+                when "0110" => hex(ch_i) := '6';
+                when "0111" => hex(ch_i) := '7';
+                when "1000" => hex(ch_i) := '8';
+                when "1001" => hex(ch_i) := '9';
+                when "1010" => hex(ch_i) := 'A';
+                when "1011" => hex(ch_i) := 'B';
+                when "1100" => hex(ch_i) := 'C';
+                when "1101" => hex(ch_i) := 'D';
+                when "1110" => hex(ch_i) := 'E';
+                when "1111" => hex(ch_i) := 'F';
+                when "ZZZZ" => hex(ch_i) := 'z';
+                when "UUUU" => hex(ch_i) := 'u';
+                when "XXXX" => hex(ch_i) := 'x';
+                when others => hex(ch_i) := '?';
+            end case;
+            ch_i := ch_i + 1;
+            if spaced and (sp_hexlen - ch_i + 1) mod 3 = 0 and ch_i /= sp_hexlen + 1 then
+                hex(ch_i) := ' ';
+                ch_i := ch_i + 1;
+            end if;
+        end loop;
+        if not spaced then
+            return hex(1 to unsp_hexlen);
+        end if;
+        return hex;
+    end hstr;
+    
+    function str(c: character; n: natural) return string is
+        variable tmp    : string(1 to n);
+    begin
+        for i in 1 to n loop
+            tmp(i)  := c;
+        end loop;
+        return tmp;
+    end str;
+    
+    
    -- functions to manipulate strings
    -----------------------------------
 
