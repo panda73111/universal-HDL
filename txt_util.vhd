@@ -284,7 +284,7 @@ package body txt_util is
 
     -- converts a std_ulogic_vector into a hex string.
     function hstr(slv: std_ulogic_vector; spaced: boolean) return string is
-        constant unsp_hexlen    : natural := (slv'length + 3) / 4;
+        constant unsp_hexlen    : natural := (slv'length + 7) / 8 * 2;
         constant sp_hexlen      : natural := unsp_hexlen + (slv'length - 1) / 8;
         variable hexlen         : natural range 1 to sp_hexlen;
         -- round slv to the next multiple of 4
