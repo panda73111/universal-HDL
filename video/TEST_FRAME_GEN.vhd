@@ -8,7 +8,6 @@ entity test_camera is
         WAIT_CYCLES     : natural := 100;
         FRAME_STEP      : natural := 200;
         ANIMATED        : boolean := false;
-        FRAME_SIZE_BITS : natural := 11;
         R_BITS          : natural range 1 to 12 := 8;
         G_BITS          : natural range 1 to 12 := 8;
         B_BITS          : natural range 1 to 12 := 8;
@@ -16,7 +15,7 @@ entity test_camera is
         );
     port (
         CLK, RST        : in std_ulogic;
-        WIDTH, HEIGHT   : in std_ulogic_vector(FRAME_SIZE_BITS-1 downto 0);
+        WIDTH, HEIGHT   : in std_ulogic_vector(15 downto 0);
         HSYNC           : out std_ulogic := '0';
         VSYNC           : out std_ulogic := '0';
         R               : out std_ulogic_vector(R_BITS-1 downto 0) := (others => '0');
