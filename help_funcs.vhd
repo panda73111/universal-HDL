@@ -358,7 +358,7 @@ package body help_funcs is
         return ret;
     end function;
 
-    function log2(val: INTEGER) return natural is
+    function log2(val: natural) return natural is
         variable res : natural;
     begin
         for i in 0 to 31 loop
