@@ -59,16 +59,16 @@ begin
     push_proc : process (RST, CLK)
     begin
         if RST='1' then
-            rd_p    <= 0;
+            wr_p    <= 0;
             WR_ACK  <= '0';
         elsif rising_edge(CLK) then
             WR_ACK  <= '0';
             if WR_EN='1' and (RD_EN='1' or cnt_u/=DEPTH) then
-                ram(rd_p)   <= DIN;
+                ram(wr_p)   <= DIN;
                 WR_ACK      <= '1';
-                rd_p        <= rd_p+1;
-                if rd_p=DEPTH-1 then
-                    rd_p    <= 0;
+                wr_p        <= wr_p+1;
+                if wr_p=DEPTH-1 then
+                    wr_p    <= 0;
                 end if;
             end if;
         end if;
@@ -77,16 +77,16 @@ begin
     pop_proc : process (RST, CLK)
     begin
         if RST='1' then
-            wr_p    <= 0;
+            rd_p    <= 0;
             RD_ACK  <= '0';
         elsif rising_edge(CLK) then
             RD_ACK  <= '0';
             if RD_EN='1' and (WR_EN='1' or cnt_u/=0) then
                 DOUT    <= ram(rd_p);
                 RD_ACK  <= '1';
-                wr_p    <= wr_p+1;
-                if wr_p=DEPTH-1 then
-                    wr_p    <= 0;
+                rd_p    <= rd_p+1;
+                if rd_p=DEPTH-1 then
+                    rd_p    <= 0;
                 end if;
             end if; 
         end if;
