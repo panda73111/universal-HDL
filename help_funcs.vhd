@@ -56,6 +56,9 @@ package help_funcs is
     function int(u : unsigned) return integer;
     function uns(v : std_ulogic_vector) return unsigned;
     function uns(n, l : natural) return unsigned;
+    function stdul(v : std_logic) return std_ulogic;
+    function stdlv(v : std_ulogic_vector) return std_logic_vector;
+    function stdulv(v : std_logic_vector) return std_ulogic_vector;
     function stdulv(n, l : natural) return std_ulogic_vector;
     function stdulv(u : unsigned) return std_ulogic_vector;
     function stdulv(c : character) return std_ulogic_vector; -- ASCII to 8 bit binary
@@ -331,6 +334,21 @@ package body help_funcs is
     function uns(n, l : natural) return unsigned is
     begin
         return uns(stdulv(n, l));
+    end function;
+    
+    function stdlv(v : std_ulogic_vector) return std_logic_vector is
+    begin
+        return std_logic_vector(v);
+    end function;
+    
+    function stdul(v : std_logic) return std_ulogic is
+    begin
+        return std_ulogic(v);
+    end function;
+    
+    function stdulv(v : std_logic_vector) return std_ulogic_vector is
+    begin
+        return std_ulogic_vector(v);
     end function;
 
     function stdulv(n, l : natural) return std_ulogic_vector is
