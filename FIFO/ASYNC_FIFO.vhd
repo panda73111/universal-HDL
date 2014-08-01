@@ -66,10 +66,7 @@ begin
             if WR_EN='1' and (RD_EN='1' or cnt_u/=DEPTH) then
                 ram(wr_p)   <= DIN;
                 WR_ACK      <= '1';
-                wr_p        <= wr_p+1;
-                if wr_p=DEPTH-1 then
-                    wr_p    <= 0;
-                end if;
+                wr_p        <= (wr_p+1) mod DEPTH;
             end if;
         end if;
     end process;
@@ -84,10 +81,7 @@ begin
             if RD_EN='1' and (WR_EN='1' or cnt_u/=0) then
                 DOUT    <= ram(rd_p);
                 RD_ACK  <= '1';
-                rd_p    <= rd_p+1;
-                if rd_p=DEPTH-1 then
-                    rd_p    <= 0;
-                end if;
+                rd_p    <= (rd_p+1) mod DEPTH;
             end if; 
         end if;
     end process;
