@@ -80,6 +80,9 @@ begin
             RD_ACK  <= '0';
             if RD_EN='1' and (WR_EN='1' or cnt_u/=0) then
                 DOUT    <= ram(rd_p);
+                if WR_EN='1' then
+                    DOUT    <= DIN;
+                end if;
                 RD_ACK  <= '1';
                 rd_p    <= (rd_p+1) mod DEPTH;
             end if; 
