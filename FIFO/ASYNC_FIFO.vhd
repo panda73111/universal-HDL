@@ -15,8 +15,9 @@ use work.help_funcs.all;
 
 entity ASYNC_FIFO is
     generic (
-        WIDTH   : natural;
-        DEPTH   : natural
+        -- default: 1 Kilobyte in bytes
+        WIDTH   : natural := 8;
+        DEPTH   : natural := 1024
     );
     port (
         CLK     : in std_ulogic;
@@ -38,11 +39,12 @@ entity ASYNC_FIFO is
 end ASYNC_FIFO;
 
 architecture rtl of ASYNC_FIFO is
-    type ram_type is array(0 to DEPTH-1) of std_ulogic_vector(width-1 downto 0);
-    signal ram          : ram_type := (others => (others => '0'));
-    signal rd_p         : natural range 0 to DEPTH-1 := 0;
-    signal wr_p         : natural range 0 to DEPTH-1 := 0;
-    signal cnt_u        : natural range 0 to DEPTH-1 := 0;
+    type ram_type is array(0 to DEPTH-1) of std_ulogic_vector(WIDTH-1 downto 0);
+    signal ram      : ram_type;
+    signal rd_p     : natural range 0 to DEPTH-1 := 0;
+    signal wr_p     : natural range 0 to DEPTH-1 := 0;
+    signal cnt_u    : natural range 0 to DEPTH-1 := 0;
+    signal dout_r   : std_ulogic_vector(WIDTH-1 downto 0) := (others => '0');
 
     -- pragma translate_off
     signal used_cnt     : natural := 0; -- for debugging, keeps the highest number of buffered packets
@@ -50,10 +52,11 @@ architecture rtl of ASYNC_FIFO is
     -- pragma translate_on
 begin
 
-    FULL            <= '1' when cnt_u=DEPTH     else '0';
-    EMPTY           <= '1' when cnt_u=0         else '0';
-    ALMOST_FULL     <= '1' when cnt_u>=DEPTH-1  else '0';
-    ALMOST_EMPTY    <= '1' when cnt_u<=1        else '0';
+    DOUT            <= DIN when (WR_EN and RD_EN)='1' and cnt_u=0 else dout_r;
+    FULL            <= '1' when cnt_u=DEPTH                       else '0';
+    EMPTY           <= '1' when cnt_u=0                           else '0';
+    ALMOST_FULL     <= '1' when cnt_u=DEPTH-1 or cnt_u=DEPTH      else '0';
+    ALMOST_EMPTY    <= '1' when cnt_u=1       or cnt_u=0          else '0';
     COUNT           <= stdulv(cnt_u, COUNT'length);
 
     push_proc : process (RST, CLK)
@@ -79,13 +82,10 @@ begin
         elsif rising_edge(CLK) then
             RD_ACK  <= '0';
             if RD_EN='1' and (WR_EN='1' or cnt_u/=0) then
-                DOUT    <= ram(rd_p);
-                if WR_EN='1' then
-                    DOUT    <= DIN;
-                end if;
+                dout_r  <= ram(rd_p);
                 RD_ACK  <= '1';
                 rd_p    <= (rd_p+1) mod DEPTH;
-            end if; 
+            end if;
         end if;
     end process;
 

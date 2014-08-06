@@ -6,9 +6,9 @@ use work.help_funcs.all;
 entity DUAL_PORT_RAM is
     generic (
         -- default: 1 Kilobyte in bytes
-        WIDTH       : integer := 8;
-        DEPTH       : integer := 1024;
-        READ_FIRST  : boolean := false
+        WIDTH       : natural := 8;
+        DEPTH       : natural := 1024;
+        WRITE_FIRST  : boolean := true
     );
     port (
         CLK : in std_ulogic;
@@ -38,11 +38,12 @@ begin
             
             DOUT    <= ram(int(RD_ADDR));
             
-            if WR_EN = '1' then
+            if WR_EN='1' then
                 ram(int(WR_ADDR))   <= DIN;
-                if not READ_FIRST and WR_ADDR=RD_ADDR then
-                    DOUT    <= DIN;
-                end if;
+            end if;
+            
+            if WRITE_FIRST and WR_EN='1' and RD_ADDR=WR_ADDR then
+                DOUT    <= DIN;
             end if;
             
         end if;

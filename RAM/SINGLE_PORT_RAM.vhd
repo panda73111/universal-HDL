@@ -1,41 +1,49 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.NUMERIC_STD.ALL;
-library UNISIM;
-use UNISIM.VComponents.all;
-
--- Read First Mode
+use work.help_funcs.all;
 
 entity SINGLE_PORT_RAM is
     generic (
         -- default: 1 Kilobyte in bytes
-        ADDR_WIDTH  : integer := 10;
-        DATA_WIDTH  : integer := 8
+        WIDTH       : natural := 10;
+        DEPTH       : natural := 8;
+        WRITE_FIRST : boolean := true
     );
     port (
         CLK : in std_ulogic;
 
-        ADDR    : in std_ulogic_vector(ADDR_WIDTH - 1 downto 0);
+        ADDR    : in std_ulogic_vector(log2(DEPTH)-1 downto 0);
         WR_EN   : in std_ulogic;
-        DATA_IN : in std_ulogic_vector(DATA_WIDTH - 1 downto 0);
+        DIN     : in std_ulogic_vector(WIDTH-1 downto 0);
 
-        DATA_OUT    : out std_ulogic_vector(DATA_WIDTH - 1 downto 0) := (others => '0')
+        DOUT    : out std_ulogic_vector(WIDTH-1 downto 0) := (others => '0')
     );
 end SINGLE_PORT_RAM;
 
 architecture Behavioral of SINGLE_PORT_RAM is
-    type ram_type is array (0 to 2 ** ADDR_WIDTH - 1) of std_ulogic_vector(DATA_WIDTH - 1 downto 0);
-    signal ram : ram_type := (others => (others => '0'));
+    
+    type ram_type is
+        array (0 to DEPTH-1) of
+        std_ulogic_vector(WIDTH-1 downto 0);
+    
+    signal ram  : ram_type;
+    
 begin
-
-    process(CLK)
+    
+    ram_ctrl_proc : process(CLK)
     begin
         if rising_edge(CLK) then
-            if WR_EN = '1' then
-                ram(to_integer(unsigned(ADDR))) <= DATA_IN;
+            
+            DOUT    <= ram(int(ADDR));
+            
+            if WR_EN='1' then
+                ram(int(ADDR))   <= DIN;
+                if WRITE_FIRST then
+                    DOUT    <= DIN;
+                end if;
             end if;
-            DATA_OUT <= ram(to_integer(unsigned(ADDR)));
+            
         end if;
     end process;
 
