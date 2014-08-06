@@ -79,13 +79,13 @@ begin
     CLK_OUT5    <= clk5_buf;
     IOCLK_OUT   <= bufpll_ioclk_out;
     
-    BUFIO2_inst : BUFIO2
-        port map (
-            I               => CLK_IN,
-            DIVCLK          => clk_in_buf,
-            IOCLK           => open,
-            SERDESSTROBE    => open
-        );
+--    BUFIO2_inst : BUFIO2
+--        port map (
+--            I               => CLK_IN,
+--            DIVCLK          => clk_in_buf,
+--            IOCLK           => open,
+--            SERDESSTROBE    => open
+--        );
     
     PLL_BASE_inst : PLL_BASE
         generic map (
@@ -102,7 +102,7 @@ begin
             CLKIN_PERIOD    => CLK_IN_PERIOD
         )
         port map (
-            CLKIN       => clk_in_buf,
+            CLKIN       => CLK_IN, -- clk_in_buf,
             CLKFBIN     => pll_base_clkfb,
             RST         => '0',
             CLKOUT0     => clk0,
