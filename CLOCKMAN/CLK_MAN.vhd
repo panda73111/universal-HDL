@@ -18,7 +18,7 @@ use IEEE.NUMERIC_STD.ALL;
 library UNISIM;
 use UNISIM.VComponents.all;
 
-entity CLKMAN is
+entity CLK_MAN is
     generic (
         CLK_IN_PERIOD : real;
         MULTIPLIER    : natural range 2 to 256 := 1;
@@ -32,7 +32,7 @@ entity CLKMAN is
     );
 end;
 
-architecture rtl of CLKMAN is
+architecture rtl of CLK_MAN is
     signal status   : std_logic_vector(1 downto 0) := "00";
 begin
 

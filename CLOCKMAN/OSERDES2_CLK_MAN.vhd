@@ -28,7 +28,7 @@ entity OSERDES2_CLK_MAN is
         DIVISOR4        : natural range 1 to 128 := 1;
         DIVISOR5        : natural range 1 to 128 := 1;
         DATA_CLK_SELECT : natural range 0 to 5:= 0;
-        IO_CLK_SELECT   : natural range 0 to 5:= 1
+        IO_CLK_SELECT   : natural range 0 to 1:= 1
     );
     port (
         CLK_IN          : in  std_ulogic;
@@ -134,10 +134,6 @@ begin
         bufpll_ioclk_in <=
             clk0 when 0,
             clk1 when 1,
-            clk2 when 2,
-            clk3 when 3,
-            clk4 when 4,
-            clk5 when 5,
             'U' when others;
     
     BUFPLL_inst : BUFPLL
