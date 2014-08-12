@@ -32,12 +32,19 @@ entity ISERDES2_CLK_MAN is
     );
     port (
         CLK_IN          : in  std_ulogic;
+        
         CLK_OUT0        : out std_ulogic := '0';
         CLK_OUT1        : out std_ulogic := '0';
         CLK_OUT2        : out std_ulogic := '0';
         CLK_OUT3        : out std_ulogic := '0';
         CLK_OUT4        : out std_ulogic := '0';
         CLK_OUT5        : out std_ulogic := '0';
+        CLK_OUT0_UBUF   : out std_ulogic := '0';
+        CLK_OUT1_UBUF   : out std_ulogic := '0';
+        CLK_OUT2_UBUF   : out std_ulogic := '0';
+        CLK_OUT3_UBUF   : out std_ulogic := '0';
+        CLK_OUT4_UBUF   : out std_ulogic := '0';
+        CLK_OUT5_UBUF   : out std_ulogic := '0';
         IOCLK_OUT       : out std_ulogic := '0';
         IOCLK_LOCKED    : out std_ulogic := '0';
         SERDESSTROBE    : out std_ulogic := '0'
@@ -71,13 +78,19 @@ architecture rtl of ISERDES2_CLK_MAN is
     signal bufpll_gclk_in   : std_ulogic := '0';
 begin
     
-    CLK_OUT0    <= clk0_buf;
-    CLK_OUT1    <= clk1_buf;
-    CLK_OUT2    <= clk2_buf;
-    CLK_OUT3    <= clk3_buf;
-    CLK_OUT4    <= clk4_buf;
-    CLK_OUT5    <= clk5_buf;
-    IOCLK_OUT   <= bufpll_ioclk_out;
+    CLK_OUT0        <= clk0_buf;
+    CLK_OUT1        <= clk1_buf;
+    CLK_OUT2        <= clk2_buf;
+    CLK_OUT3        <= clk3_buf;
+    CLK_OUT4        <= clk4_buf;
+    CLK_OUT5        <= clk5_buf;
+    CLK_OUT0_UBUF   <= clk0;
+    CLK_OUT1_UBUF   <= clk1;
+    CLK_OUT2_UBUF   <= clk2;
+    CLK_OUT3_UBUF   <= clk3;
+    CLK_OUT4_UBUF   <= clk4;
+    CLK_OUT5_UBUF   <= clk5;
+    IOCLK_OUT       <= bufpll_ioclk_out;
     
     BUFIO2_inst : BUFIO2
         port map (

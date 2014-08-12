@@ -26,7 +26,10 @@ entity CLK_MAN is
     );
     port (
         CLK_IN          : in  std_ulogic;
+        
         CLK_OUT         : out std_ulogic := '0';
+        CLK_OUT_180     : out std_ulogic := '0';
+        
         CLK_IN_STOPPED  : out std_ulogic := '0';
         CLK_OUT_STOPPED : out std_ulogic := '0'
     );
@@ -46,9 +49,10 @@ begin
             CLKFX_DIVIDE    => DIVISOR
             )
         port map (
-            CLKIN   => CLK_IN,
-            CLKFX   => CLK_OUT,
-            STATUS  => status
+            CLKIN       => CLK_IN,
+            CLKFX       => CLK_OUT,
+            CLKFX180    => CLK_OUT_180,
+            STATUS      => status
             );
 
 end;

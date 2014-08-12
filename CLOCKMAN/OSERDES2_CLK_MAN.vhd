@@ -28,10 +28,12 @@ entity OSERDES2_CLK_MAN is
         DIVISOR4        : natural range 1 to 128 := 1;
         DIVISOR5        : natural range 1 to 128 := 1;
         DATA_CLK_SELECT : natural range 0 to 5:= 0;
-        IO_CLK_SELECT   : natural range 0 to 1:= 1
+        IO_CLK_SELECT   : natural range 0 to 1:= 1;
+        SKIP_INBUF      : boolean := false
     );
     port (
         CLK_IN          : in  std_ulogic;
+        
         CLK_OUT0        : out std_ulogic := '0';
         CLK_OUT1        : out std_ulogic := '0';
         CLK_OUT2        : out std_ulogic := '0';
@@ -77,13 +79,13 @@ begin
     CLK_OUT4    <= clk4_buf;
     CLK_OUT5    <= clk5_buf;
     
-    BUFIO2_inst : BUFIO2
-        port map (
-            I               => CLK_IN,
-            DIVCLK          => clk_in_buf,
-            IOCLK           => open,
-            SERDESSTROBE    => open
-        );
+    no_inbuf_gen : if SKIP_INBUF generate
+        clk_in_buf  <= CLK_IN;
+    end generate;
+    
+    inbuf_gen : if not SKIP_INBUF generate
+        BUFIO2_inst : BUFIO2 port map (I => CLK_IN, DIVCLK => clk_in_buf);
+    end generate;
     
     PLL_BASE_inst : PLL_BASE
         generic map (
