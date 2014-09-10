@@ -21,10 +21,10 @@ package help_funcs is
     function "*"(vl, vr : std_ulogic_vector) return std_ulogic_vector;
     function "="(v : std_ulogic_vector; n : natural) return boolean;
     function "="(n : natural; v : std_ulogic_vector) return boolean;
-    function "="(u : unsigned; n : natural) return boolean;
+    --function "="(u : unsigned; n : natural) return boolean;
     function "="(u : unsigned; v : std_ulogic_vector) return boolean;
     function "/="(v : std_ulogic_vector; n : natural) return boolean;
-    function "/="(u : unsigned; n : natural) return boolean;
+    --function "/="(u : unsigned; n : natural) return boolean;
     function "/="(n : natural; v : std_ulogic_vector) return boolean;
     function "/="(u : unsigned; v : std_ulogic_vector) return boolean;
     function ">"(v : std_ulogic_vector; n : natural) return boolean;
