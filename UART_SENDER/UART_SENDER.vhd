@@ -20,7 +20,7 @@ use work.help_funcs.all;
 entity UART_SENDER is
     generic (
         CLK_IN_PERIOD   : real;
-        BAUD_RATE       : natural := 115200;
+        BAUD_RATE       : natural := 115_200;
         DATA_BITS       : natural range 5 to 8 := 8;
         STOP_BITS       : natural range 1 to 2 := 1;
         PARITY_BIT_TYPE : string := "NONE";
@@ -42,7 +42,7 @@ end UART_SENDER;
 
 architecture rtl of UART_SENDER is
     
-    constant bit_period     : real := 1000000000.0 / real(BAUD_RATE);
+    constant bit_period     : real := 1_000_000_000.0 / real(BAUD_RATE);
     constant cycle_ticks    : positive := integer(bit_period / CLK_IN_PERIOD);
     
     type state_type is (
@@ -111,7 +111,7 @@ begin
             EMPTY   => fifo_empty
         );
     
-    stm_proc : process(cur_reg, RST, fifo_dout, fifo_empty, CTS)
+    stm_proc : process(cur_reg, RST, fifo_dout, fifo_empty, cycle_end, CTS)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -119,9 +119,12 @@ begin
         r   := cr;
         
         r.fifo_rd_en    := '0';
-        r.tick_cnt      := 0;
-        if cr.sending then
-            r.tick_cnt  := (cr.tick_cnt+1) mod cycle_ticks;
+        r.tick_cnt      := cr.tick_cnt+1;
+        if
+            not cr.sending or
+            cr.tick_cnt=cycle_ticks
+        then
+            r.tick_cnt  := 0;
         end if;
         
         case cr.state is
@@ -143,7 +146,7 @@ begin
                 r.sending   := true;
                 r.txd       := '0';
                 r.parity    := '0';
-                if PARITY_BIT_TYPE="ODD" then
+                if PARITY_BIT_TYPE'length=3 and PARITY_BIT_TYPE="ODD" then
                     r.parity    := '1';
                 end if;
                 if cycle_end then
@@ -168,7 +171,7 @@ begin
                 r.state     := SEND_DATA_BIT;
                 if cr.bit_index=DATA_BITS-1 then
                     r.state := SEND_PARITY_BIT;
-                    if PARITY_BIT_TYPE="NONE" then
+                    if PARITY_BIT_TYPE'length=4 and PARITY_BIT_TYPE="NONE" then
                         r.state := SEND_STOP_BIT;
                     end if;
                 end if;
