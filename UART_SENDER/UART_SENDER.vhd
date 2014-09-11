@@ -35,7 +35,8 @@ entity UART_SENDER is
         CTS     : in std_ulogic;
         
         TXD     : out std_ulogic := '1';
-        FULL    : out std_ulogic := '0'
+        FULL    : out std_ulogic := '0';
+        BUSY    : out std_ulogic := '0'
     );
 end UART_SENDER;
 
@@ -86,7 +87,8 @@ architecture rtl of UART_SENDER is
     
 begin
     
-    TXD <= cur_reg.txd;
+    TXD     <= cur_reg.txd;
+    BUSY    <= '1' when fifo_empty='0' or cur_reg.sending else '0';
     
     cycle_end   <= cur_reg.tick_cnt=cycle_ticks-2;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
@@ -183,12 +185,17 @@ begin
                     r.state := WAIT_FOR_RECEIVER;
                     if STOP_BITS=2 then
                         r.state := SEND_SECOND_STOP_BIT;
+                    elsif fifo_empty='1' then
+                        r.state := INIT;
                     end if;
                 end if;
             
             when SEND_SECOND_STOP_BIT =>
                 if cycle_end then
                     r.state := WAIT_FOR_RECEIVER;
+                    if fifo_empty='1' then
+                        r.state := INIT;
+                    end if;
                 end if;
             
         end case;

@@ -23,16 +23,22 @@ END UART_SENDER_tb;
  
 ARCHITECTURE behavior OF UART_SENDER_tb IS 
     
-    --Inputs
+    -- Inputs
     signal clk      : std_ulogic := '0';
     signal rst      : std_ulogic := '0';
     signal din      : std_ulogic_vector(7 downto 0) := (others => '0');
     signal wr_en    : std_ulogic := '0';
     signal cts      : std_ulogic := '0';
     
-    --outputs
-    signal txd  : std_ulogic;
-    signal full : std_ulogic;
+    -- Outputs1
+    signal txd1     : std_ulogic;
+    signal full1    : std_ulogic;
+    signal busy1    : std_ulogic;
+    
+    -- Outputs2
+    signal txd2     : std_ulogic;
+    signal full2    : std_ulogic;
+    signal busy2    : std_ulogic;
     
     -- clock period definitions
     constant clk_period         : time := 10 ns;
@@ -40,9 +46,10 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     
 BEGIN
 
-    UART_SENDER_inst : entity work.UART_SENDER
+    UART_SENDER_inst1 : entity work.UART_SENDER
     generic map (
         CLK_IN_PERIOD   => clk_period_real,
+        BAUD_RATE       => 9600,
         PARITY_BIT_TYPE => "EVEN"
     )
     port map (
@@ -53,8 +60,28 @@ BEGIN
         WR_EN   => wr_en,
         CTS     => cts,
         
-        TXD     => txd,
-        FULL    => full
+        TXD     => txd1,
+        FULL    => full1,
+        BUSY    => busy1
+    );
+
+    UART_SENDER_inst2 : entity work.UART_SENDER
+    generic map (
+        CLK_IN_PERIOD   => clk_period_real,
+        BAUD_RATE       => 115200,
+        PARITY_BIT_TYPE => "ODD"
+    )
+    port map (
+        CLK => clk,
+        RST => rst,
+        
+        DIN     => din,
+        WR_EN   => wr_en,
+        CTS     => cts,
+        
+        TXD     => txd2,
+        FULL    => full2,
+        BUSY    => busy2
     );
     
     -- clock generation
@@ -81,7 +108,9 @@ BEGIN
         end loop;
         wr_en   <= '0';
         
-        wait;
+        wait until (busy1 or busy2)='0';
+        wait for 10 us;
+        report "NONE. All tests completed." severity failure;
     end process;
 
 END;
