@@ -23,7 +23,7 @@ entity UART_SENDER is
         BAUD_RATE       : natural := 115_200;
         DATA_BITS       : natural range 5 to 8 := 8;
         STOP_BITS       : natural range 1 to 2 := 1;
-        PARITY_BIT_TYPE : string := "NONE";
+        PARITY_BIT_TYPE : natural range 0 to 2 := 0;
         BUFFER_SIZE     : natural := 128
     );
     port (
@@ -41,6 +41,10 @@ entity UART_SENDER is
 end UART_SENDER;
 
 architecture rtl of UART_SENDER is
+    
+    constant NONE   : natural := 0;
+    constant EVEN   : natural := 1;
+    constant ODD    : natural := 2;
     
     constant bit_period     : real := 1_000_000_000.0 / real(BAUD_RATE);
     constant cycle_ticks    : positive := integer(bit_period / CLK_IN_PERIOD);
@@ -146,7 +150,7 @@ begin
                 r.sending   := true;
                 r.txd       := '0';
                 r.parity    := '0';
-                if PARITY_BIT_TYPE'length=3 and PARITY_BIT_TYPE="ODD" then
+                if PARITY_BIT_TYPE=ODD then
                     r.parity    := '1';
                 end if;
                 if cycle_end then
@@ -171,7 +175,7 @@ begin
                 r.state     := SEND_DATA_BIT;
                 if cr.bit_index=DATA_BITS-1 then
                     r.state := SEND_PARITY_BIT;
-                    if PARITY_BIT_TYPE'length=4 and PARITY_BIT_TYPE="NONE" then
+                    if PARITY_BIT_TYPE=NONE then
                         r.state := SEND_STOP_BIT;
                     end if;
                 end if;

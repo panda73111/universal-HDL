@@ -44,13 +44,17 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     constant clk_period         : time := 10 ns;
     constant clk_period_real    : real := real(clk_period / 1 ps) / real(1 ns / 1 ps);
     
+    constant NONE   : natural := 0;
+    constant EVEN   : natural := 1;
+    constant ODD    : natural := 2;
+    
 BEGIN
 
     UART_SENDER_inst1 : entity work.UART_SENDER
     generic map (
         CLK_IN_PERIOD   => clk_period_real,
         BAUD_RATE       => 9600,
-        PARITY_BIT_TYPE => "EVEN"
+        PARITY_BIT_TYPE => EVEN
     )
     port map (
         CLK => clk,
@@ -69,7 +73,7 @@ BEGIN
     generic map (
         CLK_IN_PERIOD   => clk_period_real,
         BAUD_RATE       => 115200,
-        PARITY_BIT_TYPE => "ODD"
+        PARITY_BIT_TYPE => ODD
     )
     port map (
         CLK => clk,
