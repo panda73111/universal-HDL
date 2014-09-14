@@ -21,17 +21,19 @@ use UNISIM.VComponents.all;
 entity CLK_MAN is
     generic (
         CLK_IN_PERIOD : real;
-        MULTIPLIER    : natural range 2 to 256 := 1;
+        MULTIPLIER    : natural range 2 to 256 := 2;
         DIVISOR       : natural range 1 to 256 := 1
     );
     port (
-        CLK_IN          : in  std_ulogic;
+        CLK_IN          : in std_ulogic;
+        RST             : in std_ulogic;
         
         CLK_OUT         : out std_ulogic := '0';
         CLK_OUT_180     : out std_ulogic := '0';
         
         CLK_IN_STOPPED  : out std_ulogic := '0';
-        CLK_OUT_STOPPED : out std_ulogic := '0'
+        CLK_OUT_STOPPED : out std_ulogic := '0';
+        LOCKED          : out std_ulogic := '0'
     );
 end;
 
@@ -50,9 +52,14 @@ begin
             )
         port map (
             CLKIN       => CLK_IN,
+            RST         => RST,
+            
+            FREEZEDCM   => '0',
+            
             CLKFX       => CLK_OUT,
             CLKFX180    => CLK_OUT_180,
-            STATUS      => status
+            STATUS      => status,
+            LOCKED      => LOCKED
             );
 
 end;
