@@ -17,8 +17,11 @@ use work.help_funcs.all;
 
 entity SPI_FLASH_CONTROL is
     generic (
-        SKIP_ERASE          : boolean := false;
-        STATUS_POLL_CYCLES  : natural := 50_000; -- 1 ms at 50 MHz
+        CLK_IN_PERIOD       : real;
+        CLK_OUT_MULT        : natural range 2 to 256;
+        CLK_OUT_DIV         : natural range 1 to 256;
+        SKIP_SEKTOR_REWRITE : boolean := false;
+        STATUS_POLL_CYCLES  : natural := 50_000 -- 1 ms at 50 MHz
     );
     port (
         CLK : in std_ulogic;
@@ -55,7 +58,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         -- Read
         SEND_READ_COMMAND,
         SEND_READ_ADDR,
-        READ_DATA
+        READ_DATA,
         
         -- Erase
         ERASE_SEND_WRITE_ENABLE_COMMAND,
@@ -67,7 +70,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         -- Program
         PROGRAM_SEND_WRITE_ENABLE_COMMAND,
         PROGRAM_END_WRITE_ENABLE_COMMAND,
-        SEND_PROGRAM_COMMAND,
+        SEND_PROGRAM_COMMAND
     );
     
     type reg_type is record
@@ -94,16 +97,33 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
     
+    signal clk_out, clk_out_180 : std_ulogic := '0';
+    signal clk_out_locked       : std_ulogic := '0';
+    
 begin
     
     DOUT    <= cur_reg.dout;
     VALID   <= cur_reg.valid;
     WR_ACK  <= cur_reg.wr_ack;
-    BUSY    <= '1' when cur_reg.state/=WAIT_FOR_INPUT else '0';
+    BUSY    <= '1' when cur_reg.state/=WAIT_FOR_INPUT or clk_out_locked='0' else '0';
     
     DQ0 <= cur_reg.dq0;
-    C   <= CLK;
+    C   <= clk_out_180;
     SN  <= cur_reg.sn;
+    
+    CLK_MAN_inst : entity work.CLK_MAN
+        generic map (
+            CLK_IN_PERIOD   => CLK_IN_PERIOD,
+            MULTIPLIER      => CLK_OUT_MULT,
+            DIVIDER         => CLK_OUT_DIV
+        )
+        port map (
+            CLK => CLK,
+            
+            CLK_OUT     => clk_out,
+            CLK_OUT_180 => clk_out_180,
+            LOCKED      => clk_out_locked
+        );
     
     stm_proc : process(RST, cur_reg, ADDR, DIN, RD_EN, WR_EN, DQ1, BULK)
         alias cr is cur_reg;
@@ -196,11 +216,11 @@ begin
         next_reg    <= r;
     end process;
     
-    sync_stm_proc : process(RST, CLK)
+    sync_stm_proc : process(RST, clk_out)
     begin
         if RST='1' then
             cur_reg <= reg_type_def;
-        elsif rising_edge(CLK) then
+        elsif rising_edge(clk_out) then
             cur_reg <= next_reg;
         end if;
     end process;
