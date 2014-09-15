@@ -31,14 +31,9 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     signal cts      : std_ulogic := '0';
     
     -- Outputs1
-    signal txd1     : std_ulogic;
-    signal full1    : std_ulogic;
-    signal busy1    : std_ulogic;
-    
-    -- Outputs2
-    signal txd2     : std_ulogic;
-    signal full2    : std_ulogic;
-    signal busy2    : std_ulogic;
+    signal txd      : std_ulogic_vector(1 downto 0);
+    signal full     : std_ulogic_vector(1 downto 0);
+    signal busy     : std_ulogic_vector(1 downto 0);
     
     -- clock period definitions
     constant clk_period         : time := 10 ns;
@@ -50,43 +45,28 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     
 BEGIN
 
-    UART_SENDER_inst1 : entity work.UART_SENDER
-    generic map (
-        CLK_IN_PERIOD   => clk_period_real,
-        BAUD_RATE       => 9600,
-        PARITY_BIT_TYPE => EVEN
-    )
-    port map (
-        CLK => clk,
-        RST => rst,
+    UART_SENDER_gen : for i in 0 to 1 generate
         
-        DIN     => din,
-        WR_EN   => wr_en,
-        CTS     => cts,
+        UART_SENDER_inst : entity work.UART_SENDER
+        generic map (
+            CLK_IN_PERIOD   => clk_period_real,
+            BAUD_RATE       => 9600,
+            PARITY_BIT_TYPE => EVEN
+        )
+        port map (
+            CLK => clk,
+            RST => rst,
+            
+            DIN     => din,
+            WR_EN   => wr_en,
+            CTS     => cts,
+            
+            TXD     => txd(i),
+            FULL    => full(i),
+            BUSY    => busy(i)
+        );
         
-        TXD     => txd1,
-        FULL    => full1,
-        BUSY    => busy1
-    );
-
-    UART_SENDER_inst2 : entity work.UART_SENDER
-    generic map (
-        CLK_IN_PERIOD   => clk_period_real,
-        BAUD_RATE       => 115200,
-        PARITY_BIT_TYPE => ODD
-    )
-    port map (
-        CLK => clk,
-        RST => rst,
-        
-        DIN     => din,
-        WR_EN   => wr_en,
-        CTS     => cts,
-        
-        TXD     => txd2,
-        FULL    => full2,
-        BUSY    => busy2
-    );
+    end generate;
     
     -- clock generation
     clk <= not clk after clk_period / 2;
@@ -112,7 +92,7 @@ BEGIN
         end loop;
         wr_en   <= '0';
         
-        wait until (busy1 or busy2)='0';
+        wait until busy="00";
         wait for 10 us;
         report "NONE. All tests completed." severity failure;
     end process;
