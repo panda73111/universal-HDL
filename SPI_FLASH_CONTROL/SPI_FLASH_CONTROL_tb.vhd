@@ -61,7 +61,6 @@ BEGIN
             DIN     => din,
             RD_EN   => rd_en,
             WR_EN   => wr_en,
-            BULK    => bulk,
             DQ1     => dq1,
             
             DOUT    => dout,
@@ -98,6 +97,19 @@ BEGIN
         rd_en   <= '0';
         wait until rising_edge(clk);
         
+        wait until busy='1';
+        wait until busy='0';
+        wait for 10 us;
+        
+        -- write one byte 0x77 at address 0xABCDEF
+        addr    <= x"ABCDEF";
+        din     <= x"77";
+        wr_en   <= '1';
+        wait until rising_edge(clk);
+        wr_en   <= '0';
+        wait until rising_edge(clk);
+        
+        wait until busy='1';
         wait until busy='0';
         wait for 10 us;
         report "NONE. All tests completed." severity failure;
