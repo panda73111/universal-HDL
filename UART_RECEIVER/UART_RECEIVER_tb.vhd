@@ -29,7 +29,6 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     signal clk      : std_ulogic := '0';
     signal rst      : std_ulogic := '0';
     signal rxd      : std_ulogic_vector(1 downto 0) := "00";
-    signal rts      : std_ulogic_vector(1 downto 0) := "00";
     signal rd_en    : std_ulogic_vector(1 downto 0) := "00";
     
     -- Outputs
@@ -58,7 +57,7 @@ BEGIN
     
     UART_SENDERs_gen : for i in 0 to 1 generate
         
-        UART_SENDERs_inst : entity work.UART_RECEIVER
+        UART_RECEIVERs_inst : entity work.UART_RECEIVER
         generic map (
             CLK_IN_PERIOD   => clk_period_real,
             BAUD_RATE       => baud_rates(i),
@@ -69,7 +68,6 @@ BEGIN
             RST => rst,
             
             RXD     => rxd(i),
-            RTS     => rts(i),
             RD_EN   => rd_en(i),
             
             DOUT    => dout(i),
@@ -98,7 +96,6 @@ BEGIN
             wait until rising_edge(clk);
             
             rxd(i)  <= '1';
-            rts(i)  <= '1';
             wait until rising_edge(clk);
             
             for j in character'pos('a') to character'pos('z') loop
@@ -129,7 +126,6 @@ BEGIN
             end loop;
             
             wait for bit_time;
-            rts(i)              <= '0';
             tests_finished(i)   <= '1';
             wait;
         end process;

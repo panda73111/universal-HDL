@@ -28,7 +28,6 @@ entity UART_RECEIVER is
         RST : in std_ulogic;
         
         RXD     : in std_ulogic;
-        RTS     : in std_ulogic;
         RD_EN   : in std_ulogic;
         
         DOUT    : out std_ulogic_vector(DATA_BITS-1 downto 0);
@@ -114,7 +113,7 @@ begin
             EMPTY   => fifo_empty
         );
     
-    stm_proc : process(cur_reg, RST, RXD, RTS, cycle_half)
+    stm_proc : process(cur_reg, RST, RXD, cycle_half)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -135,9 +134,7 @@ begin
             when WAIT_FOR_SENDER =>
                 r.receiving := false;
                 r.bit_index := "000";
-                if RTS='1' then
-                    r.state := WAIT_FOR_START;
-                end if;
+                r.state := WAIT_FOR_START;
             
             when WAIT_FOR_START =>
                 if RXD='0' then
