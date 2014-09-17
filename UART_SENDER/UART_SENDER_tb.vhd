@@ -36,7 +36,7 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     signal busy     : std_ulogic_vector(1 downto 0);
     
     -- clock period definitions
-    constant clk_period         : time := 10 ns;
+    constant clk_period         : time := 20 ns;
     constant clk_period_real    : real := real(clk_period / 1 ps) / real(1 ns / 1 ps);
     
     constant NONE   : natural := 0;
@@ -107,7 +107,9 @@ BEGIN
                 end if;
             end loop;
             
-            wait until busy="00";
+            if single_letters=0 then
+                wait until busy="00";
+            end if;
             wait for 10 us;
         end loop;
         

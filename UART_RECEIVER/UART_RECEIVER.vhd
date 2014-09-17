@@ -21,7 +21,7 @@ entity UART_RECEIVER is
         BAUD_RATE       : natural := 115_200;
         DATA_BITS       : natural range 5 to 8 := 8;
         PARITY_BIT_TYPE : natural range 0 to 2 := 0;
-        BUFFER_SIZE     : natural := 128
+        BUFFER_SIZE     : natural := 512
     );
     port (
         CLK : in std_ulogic;
@@ -124,7 +124,7 @@ begin
         r.tick_cnt      := cr.tick_cnt+1;
         if
             not cr.receiving or
-            cr.tick_cnt=cycle_ticks
+            cr.tick_cnt=cycle_ticks-1
         then
             r.tick_cnt  := 0;
         end if;
@@ -149,6 +149,11 @@ begin
                 end if;
                 if cycle_half then
                     r.state := GET_DATA;
+                end if;
+                if RXD='1' then
+                    -- invalid START bit
+                    r.error := '1';
+                    r.state := WAIT_FOR_SENDER;
                 end if;
             
             when GET_DATA =>

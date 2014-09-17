@@ -27,7 +27,7 @@ entity UART_SENDER is
         DATA_BITS       : natural range 5 to 8 := 8;
         STOP_BITS       : natural range 1 to 2 := 1;
         PARITY_BIT_TYPE : natural range 0 to 2 := 0;
-        BUFFER_SIZE     : natural := 128
+        BUFFER_SIZE     : natural := 512
     );
     port (
         CLK : in std_ulogic;
@@ -143,7 +143,7 @@ begin
         r.tick_cnt      := cr.tick_cnt+1;
         if
             not cr.sending or
-            cr.tick_cnt=cycle_ticks
+            cr.tick_cnt=cycle_ticks-1
         then
             r.tick_cnt  := 0;
         end if;
