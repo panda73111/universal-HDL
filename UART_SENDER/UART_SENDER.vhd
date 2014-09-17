@@ -16,6 +16,9 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.help_funcs.all;
+--pragma translate_off
+use work.txt_util.all;
+--pragma translate_on
 
 entity UART_SENDER is
     generic (
@@ -84,6 +87,9 @@ architecture rtl of UART_SENDER is
     signal fifo_rd_en   : std_ulogic := '0';
     signal fifo_dout    : std_ulogic_vector(DATA_BITS-1 downto 0) := (others => '0');
     signal fifo_empty   : std_ulogic := '0';
+    --pragma translate_off
+    signal fifo_rd_ack  : std_ulogic := '0';
+    --pragma translate_on
     
     signal cycle_end    : boolean := false; -- 'true' when cycle_ticks-1 ticks passed
     
@@ -96,6 +102,14 @@ begin
     
     cycle_end   <= cur_reg.tick_cnt=cycle_ticks-2;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
+    
+    --pragma translate_off
+    process
+    begin
+        wait until fifo_rd_ack='1';
+        report "sending 0x" & hstr(fifo_dout);
+    end process;
+    --pragma translate_on
     
     ASYNC_FIFO_inst : entity work.ASYNC_FIFO
         generic map (
@@ -112,6 +126,9 @@ begin
             
             DOUT    => fifo_dout,
             FULL    => FULL,
+            --pragma translate_off
+            RD_ACK  => fifo_rd_ack,
+            --pragma translate_on
             EMPTY   => fifo_empty
         );
     
@@ -134,7 +151,6 @@ begin
         case cr.state is
             
             when INIT =>
-                r.txd       := '1';
                 r.sending   := false;
                 r.bit_index := "000";
                 if fifo_empty='0' then
@@ -159,7 +175,7 @@ begin
                 end if;
             
             when WAIT_FOR_DATA =>
-                r.state         := SEND_DATA_BIT;
+                r.state := SEND_DATA_BIT;
             
             when SEND_DATA_BIT =>
                 r.txd   := fifo_dout(int(cr.bit_index));

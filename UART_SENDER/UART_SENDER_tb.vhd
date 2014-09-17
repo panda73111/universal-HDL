@@ -43,6 +43,16 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     constant EVEN   : natural := 1;
     constant ODD    : natural := 2;
     
+    type baud_rates_type is array(0 to 1) of natural;
+    constant baud_rates : baud_rates_type := (
+        115_200, 9_600
+    );
+    
+    type parity_bit_types_type is array(0 to 1) of natural;
+    constant parity_bit_types   : parity_bit_types_type := (
+        0, 1
+    );
+    
 BEGIN
 
     UART_SENDER_gen : for i in 0 to 1 generate
@@ -50,8 +60,8 @@ BEGIN
         UART_SENDER_inst : entity work.UART_SENDER
         generic map (
             CLK_IN_PERIOD   => clk_period_real,
-            BAUD_RATE       => 9600,
-            PARITY_BIT_TYPE => EVEN
+            BAUD_RATE       => baud_rates(i),
+            PARITY_BIT_TYPE => parity_bit_types(i)
         )
         port map (
             CLK => clk,
@@ -85,15 +95,22 @@ BEGIN
         
         -- insert stimulus here 
         
-        for i in character'pos('a') to character'pos('z') loop
-            wr_en   <= '1';
-            din     <= stdulv(i, 8);
-            wait until rising_edge(clk);
+        for single_letters in 0 to 1 loop
+            for i in character'pos('A') to character'pos('Z') loop
+                wr_en   <= '1';
+                din     <= stdulv(i, 8);
+                wait until rising_edge(clk);
+                wr_en   <= '0';
+                if single_letters=1 then
+                    wait until busy="00";
+                    wait for clk_period*10;
+                end if;
+            end loop;
+            
+            wait until busy="00";
+            wait for 10 us;
         end loop;
-        wr_en   <= '0';
         
-        wait until busy="00";
-        wait for 10 us;
         report "NONE. All tests completed." severity failure;
     end process;
 
