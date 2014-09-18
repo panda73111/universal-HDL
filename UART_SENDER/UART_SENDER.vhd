@@ -87,9 +87,6 @@ architecture rtl of UART_SENDER is
     signal fifo_rd_en   : std_ulogic := '0';
     signal fifo_dout    : std_ulogic_vector(DATA_BITS-1 downto 0) := (others => '0');
     signal fifo_empty   : std_ulogic := '0';
-    --pragma translate_off
-    signal fifo_rd_ack  : std_ulogic := '0';
-    --pragma translate_on
     
     signal cycle_end    : boolean := false; -- 'true' when cycle_ticks-1 ticks passed
     
@@ -102,14 +99,6 @@ begin
     
     cycle_end   <= cur_reg.tick_cnt=cycle_ticks-2;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
-    
-    --pragma translate_off
-    process
-    begin
-        wait until fifo_rd_ack='1';
-        report "sending 0x" & hstr(fifo_dout);
-    end process;
-    --pragma translate_on
     
     ASYNC_FIFO_inst : entity work.ASYNC_FIFO
         generic map (
@@ -126,9 +115,6 @@ begin
             
             DOUT    => fifo_dout,
             FULL    => FULL,
-            --pragma translate_off
-            RD_ACK  => fifo_rd_ack,
-            --pragma translate_on
             EMPTY   => fifo_empty
         );
     
