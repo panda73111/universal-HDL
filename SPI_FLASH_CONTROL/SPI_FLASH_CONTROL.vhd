@@ -59,6 +59,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         -- Read
         SEND_READ_COMMAND,
         SEND_READ_ADDR,
+        SEND_DUMMY_BYTE,
         READ_DATA,
         
         -- Erase
@@ -208,6 +209,12 @@ begin
                 r.mosi              := ADDR(int(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=0 then
+                    r.state := SEND_DUMMY_BYTE;
+                end if;
+            
+            when SEND_DUMMY_BYTE =>
+                r.data_bit_index    := cr.data_bit_index-1;
+                if cr.data_bit_index=0 then
                     r.state := READ_DATA;
                 end if;
             

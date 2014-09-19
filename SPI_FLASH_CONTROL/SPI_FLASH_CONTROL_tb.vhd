@@ -30,14 +30,14 @@ ARCHITECTURE behavior OF SPI_FLASH_CONTROL_tb IS
     signal rd_en    : std_ulogic := '0';
     signal wr_en    : std_ulogic := '0';
     signal bulk     : std_ulogic := '0';
-    signal dq1      : std_ulogic := '0';
+    signal miso     : std_ulogic := '0';
     
     -- Outputs
     signal dout    : std_ulogic_vector(7 downto 0);
     signal valid   : std_ulogic := '0';
     signal wr_ack  : std_ulogic;
     signal busy    : std_ulogic;
-    signal dq0     : std_ulogic;
+    signal mosi    : std_ulogic;
     signal c       : std_ulogic;
     signal sn      : std_ulogic;
     
@@ -61,13 +61,13 @@ BEGIN
             DIN     => din,
             RD_EN   => rd_en,
             WR_EN   => wr_en,
-            DQ1     => dq1,
+            MISO    => miso,
             
             DOUT    => dout,
             VALID   => valid,
             WR_ACK  => wr_ack,
             BUSY    => busy,
-            DQ0     => dq0,
+            MOSI    => mosi,
             C       => c,
             SN      => sn
         );
