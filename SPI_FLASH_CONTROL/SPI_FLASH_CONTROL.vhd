@@ -166,14 +166,14 @@ begin
             
             DIN     => DIN,
             RD_EN   => cur_reg.fifo_rd_en,
-            WR_EN   => WR_EN,
+            WR_EN   => wr_en_sync,
             
             DOUT    => fifo_dout,
             FULL    => FULL,
             EMPTY   => fifo_empty
         );
     
-    stm_proc : process(RST, cur_reg, ADDR, MISO, fifo_dout, fifo_empty, rd_en_sync, wr_en_sync)
+    stm_proc : process(RST, cur_reg, ADDR, MISO, fifo_dout, fifo_empty, rd_en_sync)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -188,7 +188,7 @@ begin
             when WAIT_FOR_INPUT =>
                 r.sn                := '1';
                 r.addr_bit_index    := uns(23, 6);
-                if RD_EN='1' then
+                if rd_en_sync='1' then
                     r.state := SEND_READ_COMMAND;
                 end if;
                 if fifo_empty='0' then
