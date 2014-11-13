@@ -64,6 +64,7 @@ package help_funcs is
     function stdulv(c : character) return std_ulogic_vector; -- ASCII to 8 bit binary
     function log2(val: natural) return natural;
     function sel(c : boolean; r1, r2 : natural) return natural;
+    function sel(c : boolean; r1, r2 : std_ulogic) return std_ulogic;
     function arith_mean(vl, vr : std_ulogic_vector) return std_ulogic_vector;
 
 end help_funcs;
@@ -395,7 +396,15 @@ package body help_funcs is
         end if;
         return r2;
     end function;
-
+    
+    function sel(c : boolean; r1, r2 : std_ulogic) return std_ulogic is
+    begin
+        if c then
+            return r1;
+        end if;
+        return r2;
+    end function;
+    
     function arith_mean(vl, vr : std_ulogic_vector) return std_ulogic_vector is
         constant bits   : integer := max(vl'length, vr'length);
         variable ul, ur : unsigned(bits downto 0);
