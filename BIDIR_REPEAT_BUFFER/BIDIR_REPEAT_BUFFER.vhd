@@ -27,6 +27,7 @@ use work.help_funcs.all;
 entity BIDIR_REPEAT_BUFFER is
     generic (
         PULL            : string := "UP";
+        FLOAT           : boolean := false;
         DEBOUNCE_CYCLES : natural := 5
     );
     port (
@@ -41,7 +42,7 @@ end BIDIR_REPEAT_BUFFER;
 
 architecture Behavioral of BIDIR_REPEAT_BUFFER is
     
-    constant FLOATING_LEVEL : std_ulogic := sel(PULL="UP", '1', '0');
+    constant FLOATING_LEVEL : std_ulogic := sel(FLOAT, 'Z', sel(PULL="UP", '1', '0'));
     constant DRIVING_LEVEL  : std_ulogic := sel(PULL="UP", '0', '1');
     
     type state_type is (

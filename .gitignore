@@ -2,6 +2,7 @@
 ##############################
 .Xil/
 smartxplorer_results/
+planAhead_run_*/
 _xmsgs/
 _ngo/
 iseconfig/
@@ -75,3 +76,7 @@ transcript
 *.psr
 *.csv
 *.xbcd
+*.cfi
+*.mcs
+*.prm
+*.blc
