@@ -16,9 +16,6 @@ library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.help_funcs.all;
---pragma translate_off
-use work.txt_util.all;
---pragma translate_on
 
 entity UART_SENDER is
     generic (

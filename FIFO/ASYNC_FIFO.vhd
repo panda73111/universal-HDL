@@ -34,7 +34,7 @@ entity ASYNC_FIFO is
         ALMOST_EMPTY    : out std_ulogic := '0'; -- one packet left
         WR_ACK          : out std_ulogic := '0'; -- write was successful
         RD_ACK          : out std_ulogic := '0'; -- read was successful
-        COUNT           : out std_ulogic_vector (log2(DEPTH)-1 downto 0) := (others => '0')
+        COUNT           : out std_ulogic_vector (log2(DEPTH) downto 0) := (others => '0')
     ); 
 end ASYNC_FIFO;
 
@@ -43,7 +43,7 @@ architecture rtl of ASYNC_FIFO is
     signal ram      : ram_type;
     signal rd_p     : natural range 0 to DEPTH-1 := 0;
     signal wr_p     : natural range 0 to DEPTH-1 := 0;
-    signal cnt_u    : natural range 0 to DEPTH-1 := 0;
+    signal cnt_u    : natural range 0 to DEPTH := 0;
 
     -- pragma translate_off
     signal used_cnt     : natural := 0; -- for debugging, keeps the highest number of buffered packets
