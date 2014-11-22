@@ -28,7 +28,7 @@ entity UART_DEBUG is
         WR_EN   : in std_ulogic;
         CTS     : in std_ulogic;
         
-        DONE    : out std_ulogic := '0';
+        BUSY    : out std_ulogic := '0';
         FULL    : out std_ulogic := '0';
         TXD     : out std_ulogic := '1'
     );
@@ -42,6 +42,7 @@ architecture rtl of UART_DEBUG is
     signal writing      : boolean := false;
 begin
     
+    BUSY    <= '1' when writing else '0';
     FULL    <= sender_full;
     
     UART_SENDER_inst : entity work.UART_SENDER
@@ -80,10 +81,9 @@ begin
                 end if;
                 if MSG(char_index)=nul then
                     sender_din  <= stdulv(lf);
+                    char_index  <= 1;
                     writing     <= false;
                 end if;
-            else
-                char_index  <= 1;
             end if;
         end if;
     end process;
