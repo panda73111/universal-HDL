@@ -52,16 +52,17 @@ begin
                 
                 when RESETTING =>
                     counter <= 0;
-                    state   <= WAITING;
+                    if I=I_q then
+                        state   <= WAITING;
+                    end if;
                 
                 when WAITING =>
                     counter <= counter+1;
-                    if counter=CYCLE_COUNT-2 then
-                        O       <= I;
-                        state   <= STABLE;
-                    end if;
                     if I/=I_q then
                         state   <= RESETTING;
+                    elsif counter=CYCLE_COUNT-2 then
+                        O       <= I;
+                        state   <= STABLE;
                     end if;
                 
             end case;
