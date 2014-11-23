@@ -35,6 +35,13 @@ entity UART_DEBUG is
 end UART_DEBUG;
 
 architecture rtl of UART_DEBUG is
+    type state_type is (
+        IDLE,
+        PRINT_MSG_LETTER,
+        PRINT_CR,
+        PRINT_LF
+    );
+    signal state        : state_type := IDLE;
     signal sender_din   : std_ulogic_vector(7 downto 0) := x"00";
     signal sender_wr_en : std_ulogic := '0';
     signal sender_full  : std_ulogic := '0';
@@ -42,7 +49,7 @@ architecture rtl of UART_DEBUG is
     signal writing      : boolean := false;
 begin
     
-    BUSY    <= '1' when writing else '0';
+    BUSY    <= '0' when state=IDLE else '1';
     FULL    <= sender_full;
     
     UART_SENDER_inst : entity work.UART_SENDER
@@ -65,26 +72,50 @@ begin
     process(RST, CLK)
     begin
         if RST='1' then
+            state           <= IDLE;
             sender_wr_en    <= '0';
             char_index      <= 1;
-            writing         <= false;
         elsif rising_edge(CLK) then
             sender_wr_en    <= '0';
-            if WR_EN='1' then
-                writing <= true;
-            end if;
-            if writing then
-                if sender_full='0' then
-                    sender_wr_en    <= '1';
-                    sender_din      <= stdulv(MSG(char_index));
-                    char_index      <= char_index+1;
-                end if;
-                if MSG(char_index)=nul then
-                    sender_din  <= stdulv(lf);
+            case state is
+                
+                when IDLE =>
                     char_index  <= 1;
-                    writing     <= false;
-                end if;
-            end if;
+                    if WR_EN='1' then
+                        state   <= PRINT_MSG_LETTER;
+                        if MSG(1)=NUL then
+                            state   <= PRINT_CR;
+                        end if;
+                    end if;
+                
+                when PRINT_MSG_LETTER =>
+                    if sender_full='0' then
+                        sender_wr_en    <= '1';
+                        sender_din      <= stdulv(MSG(char_index));
+                        char_index      <= char_index+1;
+                        if
+                            char_index=STR_LEN or
+                            MSG(char_index+1)=NUL
+                        then
+                            state   <= PRINT_CR;
+                        end if;
+                    end if;
+                
+                when PRINT_CR =>
+                    if sender_full='0' then
+                        sender_wr_en    <= '1';
+                        sender_din      <= stdulv(CR);
+                        state           <= PRINT_LF;
+                    end if;
+                
+                when PRINT_LF =>
+                    if sender_full='0' then
+                        sender_wr_en    <= '1';
+                        sender_din      <= stdulv(LF);
+                        state           <= IDLE;
+                    end if;
+                
+            end case;
         end if;
     end process;
     
