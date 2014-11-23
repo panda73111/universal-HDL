@@ -18,7 +18,8 @@ use work.help_funcs.all;
 entity UART_DEBUG is
     generic (
         CLK_IN_PERIOD   : real;
-        STR_LEN         : positive := 128
+        STR_LEN         : positive := 128;
+        PRINT_CRLF      : boolean := true
     );
     port (
         CLK : in std_ulogic;
@@ -45,11 +46,11 @@ architecture rtl of UART_DEBUG is
     signal sender_din   : std_ulogic_vector(7 downto 0) := x"00";
     signal sender_wr_en : std_ulogic := '0';
     signal sender_full  : std_ulogic := '0';
+    signal sender_busy  : std_ulogic := '0';
     signal char_index   : natural range 1 to STR_LEN := 1;
-    signal writing      : boolean := false;
 begin
     
-    BUSY    <= '0' when state=IDLE else '1';
+    BUSY    <= '0' when state=IDLE and sender_busy='0' else '1';
     FULL    <= sender_full;
     
     UART_SENDER_inst : entity work.UART_SENDER
@@ -66,7 +67,7 @@ begin
             
             TXD     => TXD,
             FULL    => sender_full,
-            BUSY    => open
+            BUSY    => sender_busy
         );
     
     process(RST, CLK)
@@ -82,8 +83,9 @@ begin
                 when IDLE =>
                     char_index  <= 1;
                     if WR_EN='1' then
-                        state   <= PRINT_MSG_LETTER;
-                        if MSG(1)=NUL then
+                        if MSG(1)/=NUL then
+                            state   <= PRINT_MSG_LETTER;
+                        elsif PRINT_CRLF then
                             state   <= PRINT_CR;
                         end if;
                     end if;
@@ -97,7 +99,10 @@ begin
                             char_index=STR_LEN or
                             MSG(char_index+1)=NUL
                         then
-                            state   <= PRINT_CR;
+                            state   <= IDLE;
+                            if PRINT_CRLF then
+                                state   <= PRINT_CR;
+                            end if;
                         end if;
                     end if;
                 
