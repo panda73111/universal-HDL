@@ -76,7 +76,7 @@ begin
             BUSY    => open
         );
     
-    stm_proc : process(EN)
+    stm_proc : process(cur_reg, EN)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
