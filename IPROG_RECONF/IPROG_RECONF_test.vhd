@@ -17,7 +17,7 @@ entity IPROG_RECONF_test is
         BITFILE_SELECT      : natural range 0 to 1 := 1;
         BITFILE_ADDR_0      : std_ulogic_vector(23 downto 0) := x"000000";
         BITFILE_ADDR_1      : std_ulogic_vector(23 downto 0) := x"060000";
-        CYCLES_TO_REPROG    : natural := 20_000_000 * 5 -- 5 sec
+        CYCLES_TO_REPROG    : natural := 50_000_000 * 5 -- 5 sec
     );
     port (
         CLK20   : in std_ulogic;
