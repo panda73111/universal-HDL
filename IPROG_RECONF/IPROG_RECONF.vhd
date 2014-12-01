@@ -20,7 +20,7 @@ entity IPROG_RECONF is
     generic (
         START_ADDR      : std_ulogic_vector(23 downto 0);
         FALLBACK_ADDR   : std_ulogic_vector(23 downto 0);
-        OPCODE_READ     : std_ulogic_vector(7 downto 0) := x"0B"
+        OPCODE_READ     : std_ulogic_vector(7 downto 0) := x"03"
     );
     port (
         CLK : in std_ulogic;
@@ -61,14 +61,23 @@ architecture rtl of IPROG_RECONF is
         icap_en     => '1'
     );
     
-    signal cur_reg, next_reg    : reg_type := reg_type_def;    
+    signal cur_reg, next_reg    : reg_type := reg_type_def;
+    signal icap_i_bitswapped    : std_ulogic_vector(15 downto 0) := x"0000";
 begin
+    
+    bitswap_lsb_gen : for i in 0 to 7 generate
+        icap_i_bitswapped(i)    <= cur_reg.icap_i(7-i);
+    end generate;
+    
+    bitswap_msb_gen : for i in 8 to 15 generate
+        icap_i_bitswapped(i)    <= cur_reg.icap_i(23-i);
+    end generate;
     
     ICAP_SPARTAN6_inst : ICAP_SPARTAN6
         port map (
             CLK => CLK,
             
-            I       => stdlv(cur_reg.icap_i),
+            I       => stdlv(icap_i_bitswapped),
             CE      => cur_reg.icap_en,
             WRITE   => '0', -- write mode
             
@@ -147,7 +156,7 @@ begin
                 r.state     := WAIT_FOR_RECONF;
             
             when WAIT_FOR_RECONF =>
-                null;
+                r.icap_en   := '1';
             
         end case;
         
