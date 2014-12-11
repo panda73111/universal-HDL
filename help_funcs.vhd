@@ -21,10 +21,10 @@ package help_funcs is
     function "*"(vl, vr : std_ulogic_vector) return std_ulogic_vector;
     function "="(v : std_ulogic_vector; n : natural) return boolean;
     function "="(n : natural; v : std_ulogic_vector) return boolean;
-    --function "="(u : unsigned; n : natural) return boolean;
+    function "="(u : unsigned; n : natural) return boolean;
     function "="(u : unsigned; v : std_ulogic_vector) return boolean;
     function "/="(v : std_ulogic_vector; n : natural) return boolean;
-    --function "/="(u : unsigned; n : natural) return boolean;
+    function "/="(u : unsigned; n : natural) return boolean;
     function "/="(n : natural; v : std_ulogic_vector) return boolean;
     function "/="(u : unsigned; v : std_ulogic_vector) return boolean;
     function ">"(v : std_ulogic_vector; n : natural) return boolean;
@@ -54,6 +54,8 @@ package help_funcs is
     function "&"(ul, ur : unsigned) return std_ulogic_vector;
     function int(v : std_ulogic_vector) return integer;
     function int(u : unsigned) return integer;
+    function nat(v : std_ulogic_vector) return natural;
+    function nat(u : unsigned) return natural;
     function uns(v : std_ulogic_vector) return unsigned;
     function uns(n, l : natural) return unsigned;
     function stdul(v : std_logic) return std_ulogic;
@@ -335,6 +337,17 @@ package body help_funcs is
     function uns(n, l : natural) return unsigned is
     begin
         return uns(stdulv(n, l));
+    end function;
+    
+    
+    function nat(v : std_ulogic_vector) return natural is
+    begin
+        return to_integer(uns(v));
+    end function;
+    
+    function nat(u : unsigned) return natural is
+    begin
+        return to_integer(u);
     end function;
     
     function stdlv(v : std_ulogic_vector) return std_logic_vector is
