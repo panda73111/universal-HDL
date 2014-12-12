@@ -50,6 +50,13 @@ ARCHITECTURE rtl OF VIDEO_TIMING_GEN_tb IS
     constant CLK_IN_period      : time := 50 ns; -- 20 MHz
     constant CLK_IN_period_real : real := real(CLK_IN_period / 1 ps) / real(1 ns / 1 ps);
     
+    signal analyzer_pos_vsync   : std_ulogic := '0';
+    signal analyzer_pos_hsync   : std_ulogic := '0';
+    signal analyzer_width       : std_ulogic_vector(10 downto 0) := (others => '0');
+    signal analyzer_height      : std_ulogic_vector(10 downto 0) := (others => '0');
+    signal analyzer_interlaced  : std_ulogic := '0';
+    signal analyzer_valid       : std_ulogic := '0';
+    
 BEGIN
     
     VIDEO_TIMING_GEN_inst : entity work.VIDEO_TIMING_GEN
@@ -76,6 +83,24 @@ BEGIN
             RGB_ENABLE  => RGB_ENABLE,
             X           => X,
             Y           => Y
+        );
+    
+    VIDEO_ANALYZER_inst : entity work.VIDEO_ANALYZER
+        port map (
+            CLK => CLK_OUT,
+            RST => RST,
+            
+            START       => POS_VSYNC,
+            VSYNC       => VSYNC,
+            HSYNC       => HSYNC,
+            RGB_VALID   => RGB_ENABLE,
+            
+            POSITIVE_VSYNC  => analyzer_pos_vsync,
+            POSITIVE_HSYNC  => analyzer_pos_hsync,
+            WIDTH           => analyzer_width,
+            HEIGHT          => analyzer_height,
+            INTERLACED      => analyzer_interlaced,
+            VALID           => analyzer_valid
         );
     
     CLK_IN  <= not CLK_IN after CLK_IN_period/2;
