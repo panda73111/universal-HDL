@@ -87,6 +87,8 @@ architecture rtl of VIDEO_TIMING_GEN is
     
     signal cur_profile  : std_ulogic_vector(PROFILE_BITS-1 downto 0) := (others => '0');
     signal profile_set  : boolean := false;
+    signal reprog_mult  : std_ulogic_vector(7 downto 0) := x"00";
+    signal reprog_div   : std_ulogic_vector(7 downto 0) := x"00";
     signal reprog_en    : std_ulogic := '0';
     signal rst_stm      : std_ulogic := '1';
     
@@ -108,6 +110,9 @@ begin
     total_hor_pixels    <= vp.h_sync_cycles + vp.h_front_porch + vp.left_border + vp.width +
                             vp.right_border + vp.h_back_porch;
     
+    reprog_mult <= stdulv(vp.clk10_mult*CLK_IN_TO_CLK10_MULT, 8);
+    reprog_div  <= stdulv(vp.clk10_div*CLK_IN_TO_CLK10_DIV, 8);
+    
     CLK_MAN_inst : entity work.CLK_MAN
         generic map (
             CLK_IN_PERIOD   => CLK_IN_PERIOD,
@@ -118,8 +123,8 @@ begin
             CLK_IN  => CLK_IN,
             RST     => RST,
             
-            REPROG_MULT => stdulv(vp.clk10_mult*CLK_IN_TO_CLK10_MULT, 8),
-            REPROG_DIV  => stdulv(vp.clk10_div*CLK_IN_TO_CLK10_DIV, 8),
+            REPROG_MULT => reprog_mult,
+            REPROG_DIV  => reprog_div,
             REPROG_EN   => reprog_en,
             
             CLK_OUT => pix_clk,

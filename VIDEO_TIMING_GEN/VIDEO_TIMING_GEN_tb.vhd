@@ -45,8 +45,6 @@ ARCHITECTURE rtl OF VIDEO_TIMING_GEN_tb IS
     signal X            : std_ulogic_vector(X_BITS-1 downto 0);
     signal Y            : std_ulogic_vector(Y_BITS-1 downto 0);
     
-    constant FRAME_COUNT    : natural := 4;
-    
     constant CLK_IN_period      : time := 50 ns; -- 20 MHz
     constant CLK_IN_period_real : real := real(CLK_IN_period / 1 ps) / real(1 ns / 1 ps);
     
@@ -56,6 +54,10 @@ ARCHITECTURE rtl OF VIDEO_TIMING_GEN_tb IS
     signal analyzer_height      : std_ulogic_vector(10 downto 0) := (others => '0');
     signal analyzer_interlaced  : std_ulogic := '0';
     signal analyzer_valid       : std_ulogic := '0';
+    
+    signal start_tests          : boolean := false;
+    signal finished_vsync_test  : boolean := false;
+    signal vp                   : video_profile_type;
     
 BEGIN
     
@@ -105,6 +107,8 @@ BEGIN
     
     CLK_IN  <= not CLK_IN after CLK_IN_period/2;
     
+    vp  <= video_profiles(int(PROFILE));
+    
     -- Stimulus process
     stim_proc: process
     begin
@@ -117,20 +121,42 @@ BEGIN
         
         -- insert stimulus here
         
+        wait until falling_edge(POS_VSYNC);
+        wait for 1 us;
+        
         for profile_i in 0 to VIDEO_PROFILE_COUNT-1 loop
             report "Setting profile " & natural'image(profile_i);
             PROFILE <= stdulv(profile_i, PROFILE_BITS);
             
-            for frame_i in 0 to FRAME_COUNT-1 loop
-                wait until POS_VSYNC='1';
-                wait until POS_VSYNC='0';
-            end loop;
-            wait for 100 ns;
+            start_tests <= true;
+            wait until rising_edge(CLK_IN);
+            start_tests <= false;
+            
+            wait until finished_vsync_test;
+            
+            wait until analyzer_valid='1';
+            wait for 1 us;
         end loop;
         
         wait for 100 ns;
         report "NONE. All tests completed successfully"
             severity FAILURE;
     end process;
-
+    
+    sync_line_count_proc : process
+        variable counter    : natural;
+    begin
+        wait until start_tests;
+        
+        -- test sync line count
+        wait until rising_edge(POS_VSYNC);
+        while POS_VSYNC='1' loop
+            counter := counter+1;
+            wait until rising_edge(CLK_IN);
+        end loop;
+        assert counter=vp.v_sync_lines
+            report "vertical sync line count doesn't match!"
+            severity FAILURE;
+    end process;
+    
 END;
