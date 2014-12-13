@@ -55,8 +55,8 @@ ARCHITECTURE rtl OF VIDEO_TIMING_GEN_tb IS
     signal analyzer_interlaced  : std_ulogic := '0';
     signal analyzer_valid       : std_ulogic := '0';
     
-    signal start_tests          : boolean := false;
-    signal finished_vsync_test  : boolean := false;
+    signal start_ver_test       : boolean := false;
+    signal finished_ver_test    : boolean := false;
     signal vp                   : video_profile_type;
     
 BEGIN
@@ -128,11 +128,13 @@ BEGIN
             report "Setting profile " & natural'image(profile_i);
             PROFILE <= stdulv(profile_i, PROFILE_BITS);
             
-            start_tests <= true;
-            wait until rising_edge(CLK_IN);
-            start_tests <= false;
+            start_ver_test  <= true;
+            wait until falling_edge(CLK_IN);
+            start_ver_test  <= false;
             
-            wait until finished_vsync_test;
+            
+            
+            wait until finished_ver_test;
             
             wait until analyzer_valid='1';
             wait for 1 us;
@@ -144,19 +146,110 @@ BEGIN
     end process;
     
     sync_line_count_proc : process
-        variable counter    : natural;
+        type state_type is (
+            VSYNC,
+            V_FRONT_PORCH,
+            RGB,
+            RGB_HSYNC,
+            V_BACK_PORCH,
+            FRAME_END
+        );
+        variable line_count : natural;
+        variable state      : state_type;
     begin
-        wait until start_tests;
+        finished_ver_test   <= false;
+        wait until start_ver_test;
+        report "Starting vertical test";
         
-        -- test sync line count
+        line_count  := 0;
+        state       := VSYNC;
+        
         wait until rising_edge(POS_VSYNC);
-        while POS_VSYNC='1' loop
-            counter := counter+1;
-            wait until rising_edge(CLK_IN);
+        
+        while not finished_ver_test loop
+            
+            wait until rising_edge(POS_HSYNC) or rising_edge(RGB_ENABLE);
+            
+            assert POS_HSYNC/=RGB_ENABLE
+                report "Horizontal sync during RGB period!"
+                severity FAILURE;
+            
+            case state is
+                
+                when VSYNC =>
+                    assert RGB_ENABLE='0'
+                        report "RGB period during vertical sync!"
+                        severity FAILURE;
+                    if POS_VSYNC='0' then
+                        -- transition to vertical front porch
+                        assert line_count+1=vp.v_sync_lines
+                            report "Vertical sync line count doesn't match!"
+                            severity FAILURE;
+                        line_count  := 0;
+                        state       := V_FRONT_PORCH;
+                    else
+                        -- vertical sync period
+                        line_count  := line_count+1;
+                    end if;
+                
+                when V_FRONT_PORCH =>
+                    assert POS_VSYNC='0'
+                        report "Vertical sync during vertical front porch period!"
+                        severity FAILURE;
+                    if RGB_ENABLE='1' then
+                        -- transition to active RGB lines
+                        assert line_count=vp.v_front_porch+vp.top_border
+                            report "Vertical front porch doesn't match!"
+                            severity FAILURE;
+                        line_count  := 0;
+                        state       := RGB_HSYNC;
+                    else
+                        -- vertical front porch
+                        line_count  := line_count+1;
+                    end if;
+                
+                when RGB_HSYNC =>
+                    assert RGB_ENABLE='0'
+                        report "No horizontal sync between two RGB periods!"
+                        severity FAILURE;
+                    state   := RGB;
+                
+                when RGB =>
+                    if RGB_ENABLE='1' then
+                        line_count  := line_count+1;
+                        state       := RGB_HSYNC;
+                    else
+                        -- first line of vertical back porch
+                        assert line_count+1=vp.height
+                            report "Height doesn't match!"
+                            severity FAILURE;
+                        line_count  := 0;
+                        state       := V_BACK_PORCH;
+                    end if;
+                
+                when V_BACK_PORCH =>
+                    assert RGB_ENABLE='0'
+                        report "RGB period during vertical back porch!"
+                        severity FAILURE;
+                    if POS_VSYNC='1' then
+                        -- transition to vertical sync
+                        assert line_count+1=vp.v_back_porch+vp.bottom_border
+                            report "Vertical back porch doesn't match!"
+                            severity FAILURE;
+                        state   := FRAME_END;
+                    else
+                        line_count  := line_count+1;
+                    end if;
+                
+                when FRAME_END =>
+                    finished_ver_test   <= true;
+                
+            end case;
+            
         end loop;
-        assert counter=vp.v_sync_lines
-            report "vertical sync line count doesn't match!"
-            severity FAILURE;
+        
+        wait until falling_edge(CLK_IN);
+        finished_ver_test   <= false;
     end process;
     
 END;
