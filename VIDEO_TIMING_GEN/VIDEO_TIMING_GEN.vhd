@@ -22,8 +22,8 @@ entity VIDEO_TIMING_GEN is
         CLK_IN_TO_CLK10_MULT    : natural := 1;
         CLK_IN_TO_CLK10_DIV     : natural := 2;
         PROFILE_BITS            : natural := log2(VIDEO_PROFILE_COUNT);
-        X_BITS                  : natural := 11;
-        Y_BITS                  : natural := 11
+        X_BITS                  : natural := 12;
+        Y_BITS                  : natural := 12
     );
     port (
         CLK_IN  : in std_ulogic;
@@ -37,9 +37,11 @@ entity VIDEO_TIMING_GEN is
         POS_HSYNC   : out std_ulogic := '0';
         VSYNC       : out std_ulogic := '0';
         HSYNC       : out std_ulogic := '0';
-        RGB_ENABLE  : out std_ulogic := '0';
         X           : out std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
-        Y           : out std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0')
+        Y           : out std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0');
+        RGB_ENABLE  : out std_ulogic := '0';
+        RGB_X       : out std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
+        RGB_Y       : out std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0')
     );
 end VIDEO_TIMING_GEN;
 
@@ -55,25 +57,25 @@ architecture rtl of VIDEO_TIMING_GEN is
     );
     
     type reg_type is record
-        state           : state_type;
-        x               : natural range 0 to 2**X_BITS-1;
-        y               : natural range 0 to 2**Y_BITS-1;
-        ver_rgb_enable  : std_ulogic;
-        hor_rgb_enable  : std_ulogic;
-        pos_vsync       : std_ulogic;
-        pos_hsync       : std_ulogic;
-        other_frame     : boolean;
+        state               : state_type;
+        x                   : natural range 0 to 2**X_BITS-1;
+        y                   : natural range 0 to 2**Y_BITS-1;
+        ver_rgb_enable      : std_ulogic;
+        hor_rgb_enable      : std_ulogic;
+        pos_vsync           : std_ulogic;
+        pos_hsync           : std_ulogic;
+        extra_blank_line    : natural range 0 to 1;
     end record;
     
     constant reg_type_def   : reg_type := (
-        state           => HOR_SYNC,
-        x               => 0,
-        y               => 0,
-        ver_rgb_enable  => '0',
-        hor_rgb_enable  => '0',
-        pos_vsync       => '0',
-        pos_hsync       => '0',
-        other_frame     => false
+        state               => HOR_SYNC,
+        x                   => 0,
+        y                   => 0,
+        ver_rgb_enable      => '0',
+        hor_rgb_enable      => '0',
+        pos_vsync           => '0',
+        pos_hsync           => '0',
+        extra_blank_line    => 0
     );
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
@@ -84,6 +86,8 @@ architecture rtl of VIDEO_TIMING_GEN is
     signal total_ver_lines  : natural range 0 to 2**(Y_BITS+1)-1;
     signal total_hor_pixels : natural range 0 to 2**(X_BITS+1)-1;
     signal clk_locked       : std_ulogic := '0';
+    signal x_q              : std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
+    signal y_q              : std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0');
     
     signal cur_profile  : std_ulogic_vector(PROFILE_BITS-1 downto 0) := (others => '0');
     signal profile_set  : boolean := false;
@@ -100,12 +104,16 @@ begin
     POS_HSYNC   <= cur_reg.pos_hsync;
     VSYNC       <= cur_reg.pos_vsync xor sel(vp.negative_vsync, '1', '0');
     HSYNC       <= cur_reg.pos_hsync xor sel(vp.negative_hsync, '1', '0');
+    X           <= x_q;
+    Y           <= y_q;
     RGB_ENABLE  <= cur_reg.ver_rgb_enable and cur_reg.hor_rgb_enable;
+    RGB_X       <= x_q-vp.h_sync_cycles-vp.h_front_porch-vp.left_border;
+    RGB_Y       <= y_q-vp.v_sync_lines-vp.v_front_porch-vp.top_border;
     
     vp  <= video_profiles(int(PROFILE));
     
     total_ver_lines     <= vp.v_sync_lines + vp.v_front_porch + vp.top_border + vp.height +
-                            vp.bottom_border + vp.v_back_porch + sel(vp.interlaced, 1, 0);
+                            vp.bottom_border + vp.v_back_porch + cur_reg.extra_blank_line;
     
     total_hor_pixels    <= vp.h_sync_cycles + vp.h_front_porch + vp.left_border + vp.width +
                             vp.right_border + vp.h_back_porch;
@@ -169,8 +177,8 @@ begin
         
         if
             not vp.interlaced or
-            not cr.other_frame or
-            x=total_hor_pixels/2
+            cr.extra_blank_line=0 or
+            x=total_hor_pixels/2 -- vsync offset every other interlaced frame
         then
             if y=0 then
                 -- vsync period
@@ -181,10 +189,10 @@ begin
             end if;
         end if;
         
-        if y=vp.v_sync_lines+vp.v_front_porch+vp.top_border then
+        if y=vp.v_sync_lines+vp.v_front_porch+vp.top_border+cr.extra_blank_line then
             r.ver_rgb_enable    := '1';
         end if;
-        if y=vp.v_sync_lines+vp.v_front_porch+vp.top_border+vp.height then
+        if y=vp.v_sync_lines+vp.v_front_porch+vp.top_border+cr.extra_blank_line+vp.height then
             r.ver_rgb_enable    := '0';
         end if;
         
@@ -228,24 +236,21 @@ begin
                     -- line switch
                     r.x := 0;
                     r.y := y+1;
-                    if
-                        vp.interlaced and
-                        not cr.other_frame and
-                        y=vp.v_sync_lines+vp.v_front_porch-1
-                    then
-                        -- skip the additional interlacing
-                        -- blank line in even frames
-                        r.y := y+2;
-                    end if;
                     if cr.y=total_ver_lines-1 then
                         -- frame switch
-                        r.y             := 0;
-                        r.other_frame   := not cr.other_frame;
+                        r.y := 0;
+                        -- one extra vertical front porch blank line
+                        -- every other frame when interlaced
+                        r.extra_blank_line  := (cr.extra_blank_line+1) mod 2;
                     end if;
                     r.state := HOR_SYNC;
                 end if;
             
         end case;
+                
+        if not vp.interlaced then
+            r.extra_blank_line  := 0;
+        end if;
         
         if rst_stm='1' then
             r   := reg_type_def;
@@ -260,6 +265,8 @@ begin
             cur_reg <= reg_type_def;
         elsif rising_edge(pix_clk) then
             cur_reg <= next_reg;
+            x_q     <= stdulv(cur_reg.x, X_BITS);
+            y_q     <= stdulv(cur_reg.y, Y_BITS);
         end if;
     end process;
     
