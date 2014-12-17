@@ -91,8 +91,8 @@ begin
             VSYNC       => VSYNC,
             HSYNC       => HSYNC,
             RGB_ENABLE  => rgb_enable,
-            x           => x,
-            y           => y
+            RGB_X       => x,
+            RGB_Y       => y
         );
     
     iterate : process (cur_reg, frame_count, vp)
