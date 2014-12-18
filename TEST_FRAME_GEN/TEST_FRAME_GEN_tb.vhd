@@ -22,8 +22,8 @@ ENTITY TEST_FRAME_GEN_tb IS
     generic (
         FIRST_PROFILE   : natural := 0;
         LAST_PROFILE    : natural := VIDEO_PROFILE_COUNT-1;
-        FRAME_COUNT     : natural := 3;
-        FRAME_STEP      : natural := 1;
+        FRAME_COUNT     : natural := 5; -- frames of each video resolution
+        FRAME_STEP      : natural := 0; -- swtitch pattern every frame
         R_BITS          : natural range 1 to 12 := 8;
         G_BITS          : natural range 1 to 12 := 8;
         B_BITS          : natural range 1 to 12 := 8;
@@ -42,7 +42,8 @@ ARCHITECTURE rtl OF TEST_FRAME_GEN_tb IS
     signal PROFILE  : std_ulogic_vector(PROFILE_BITS-1 downto 0) := (others => '0');
     
     -- Outputs
-    signal CLK_OUT  : std_ulogic;
+    signal CLK_OUT          : std_ulogic;
+    signal CLK_OUT_LOCKED   : std_ulogic;
     
     signal HSYNC        : std_ulogic;
     signal VSYNC        : std_ulogic;
@@ -75,7 +76,8 @@ BEGIN
             
             PROFILE => PROFILE,
             
-            CLK_OUT => CLK_OUT,
+            CLK_OUT         => CLK_OUT,
+            CLK_OUT_LOCKED  => CLK_OUT_LOCKED,
             
             HSYNC       => HSYNC,
             VSYNC       => VSYNC,
@@ -99,11 +101,14 @@ BEGIN
         
         -- insert stimulus here
         
+        wait until rising_edge(CLK_OUT_LOCKED);
+        
         for profile_i in FIRST_PROFILE to LAST_PROFILE loop
             report "Setting profile " & natural'image(profile_i);
             PROFILE <= stdulv(profile_i, PROFILE_BITS);
             
-            for frame_i in 0 to FRAME_COUNT-1 loop
+            wait until rising_edge(CLK_OUT_LOCKED);
+            for frame_i in 0 to FRAME_COUNT loop
                 wait until VSYNC'event;
                 wait until VSYNC'event;
             end loop;

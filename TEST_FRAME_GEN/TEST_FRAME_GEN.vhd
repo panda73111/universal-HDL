@@ -25,7 +25,8 @@ entity TEST_FRAME_GEN is
         
         PROFILE : in std_ulogic_vector(PROFILE_BITS-1 downto 0);
         
-        CLK_OUT : out std_ulogic := '0';
+        CLK_OUT         : out std_ulogic := '0';
+        CLK_OUT_LOCKED  : out std_ulogic := '0';
         
         HSYNC       : out std_ulogic := '0';
         VSYNC       : out std_ulogic := '0';
@@ -39,9 +40,9 @@ end TEST_FRAME_GEN;
 architecture rtl of TEST_FRAME_GEN is
     
     constant MAX_BITS   : natural := max(R_BITS, max(G_BITS, B_BITS));
-    constant GRAD_LIMIT : natural := (2**MAX_BITS)-1;
-    constant R_LOW      : natural := MAX_BITS-R_BITS;
-    constant G_LOW      : natural := MAX_BITS-G_BITS;
+    constant GRAD_LIMIT : natural := (2**MAX_BITS)-1; -- the highest possible brightness
+    constant R_LOW      : natural := MAX_BITS-R_BITS; -- for scaling the highest brightness down to the
+    constant G_LOW      : natural := MAX_BITS-G_BITS; --  maximum of the respective color channel
     constant B_LOW      : natural := MAX_BITS-B_BITS;
     
     type reg_type is record
@@ -58,9 +59,10 @@ architecture rtl of TEST_FRAME_GEN is
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
     
-    signal pix_clk  : std_ulogic := '0';
+    signal pix_clk          : std_ulogic := '0';
+    signal pix_clk_locked   : std_ulogic := '0';
     
-    signal frame_count  : natural := 0;
+    signal frame_count  : natural range 0 to (FRAME_STEP+1)*DIF_FRAMES-1 := 0;
     signal vp           : video_profile_type;
     
     signal x            : std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
@@ -79,7 +81,8 @@ architecture rtl of TEST_FRAME_GEN is
     
 begin
     
-    CLK_OUT <= pix_clk;
+    CLK_OUT         <= pix_clk;
+    CLK_OUT_LOCKED  <= pix_clk_locked;
     
     R   <= cur_reg.r;
     G   <= cur_reg.g;
@@ -107,7 +110,8 @@ begin
             
             PROFILE => PROFILE,
             
-            CLK_OUT => pix_clk,
+            CLK_OUT         => pix_clk,
+            CLK_OUT_LOCKED  => pix_clk_locked,
             
             POS_VSYNC   => pos_vsync,
             POS_HSYNC   => pos_hsync,
@@ -119,13 +123,14 @@ begin
         );
     
     stm_proc : process (frame_count, vp, x, y, rgb_enable_out)
-        variable x_grad     : unsigned(MAX_BITS downto 0) := (others => '0');
-        variable y_grad     : unsigned(MAX_BITS downto 0) := (others => '0');
-        variable x_grad_inv : unsigned(MAX_BITS downto 0) := (others => '0');
-        variable y_grad_inv : unsigned(MAX_BITS downto 0) := (others => '0');
-        variable xy0_grad   : unsigned(MAX_BITS-1 downto 0) := (others => '0');
-        variable xy1_grad   : unsigned(MAX_BITS-1 downto 0) := (others => '0');
-        variable xy2_grad   : unsigned(MAX_BITS-1 downto 0) := (others => '0');
+        -- 0 to maximum brightness (of all channels) ...
+        variable x_grad     : unsigned(MAX_BITS downto 0); -- ... from left to right
+        variable y_grad     : unsigned(MAX_BITS downto 0); -- ... from top to bottom
+        variable x_grad_inv : unsigned(MAX_BITS downto 0); -- ... from right to left
+        variable y_grad_inv : unsigned(MAX_BITS downto 0); -- ... from bottom to top
+        variable xy0_grad   : unsigned(MAX_BITS-1 downto 0); -- ... from top left to bottom right
+        variable xy1_grad   : unsigned(MAX_BITS-1 downto 0); -- ... from top right to bottom left
+        variable xy2_grad   : unsigned(MAX_BITS-1 downto 0); -- ... from bottom left to top right
         variable frame_perc : natural := 0;
     begin
         if vp.width=0 or vp.height=0 or rgb_enable_out='0' then
@@ -190,9 +195,12 @@ begin
             if pos_vsync_q='0' and pos_vsync='1' then
                 -- new frame
                 frame_count <= frame_count+1;
-                if frame_count>=(FRAME_STEP+1)*DIF_FRAMES-1 then
+                if frame_count=(FRAME_STEP+1)*DIF_FRAMES-1 then
                     frame_count <= 0;
                 end if;
+            end if;
+            if pix_clk_locked='0' then
+                frame_count <= 0;
             end if;
             pos_vsync_q     <= pos_vsync;
             hsync_q         <= hsync_out;
