@@ -37,7 +37,8 @@ ARCHITECTURE rtl OF VIDEO_TIMING_GEN_tb IS
     signal PROFILE  : std_ulogic_vector(PROFILE_BITS-1 downto 0) := (others => '0');
     
     -- Outputs
-    signal CLK_OUT  : std_ulogic;
+    signal CLK_OUT          : std_ulogic;
+    signal CLK_OUT_LOCKED   : std_ulogic;
     
     signal POS_VSYNC    : std_ulogic;
     signal POS_HSYNC    : std_ulogic;
@@ -52,18 +53,13 @@ ARCHITECTURE rtl OF VIDEO_TIMING_GEN_tb IS
     constant CLK_IN_period      : time := 50 ns; -- 20 MHz
     constant CLK_IN_period_real : real := real(CLK_IN_period / 1 ps) / real(1 ns / 1 ps);
     
-    signal analyzer_pos_vsync   : std_ulogic := '0';
-    signal analyzer_pos_hsync   : std_ulogic := '0';
-    signal analyzer_width       : std_ulogic_vector(10 downto 0) := (others => '0');
-    signal analyzer_height      : std_ulogic_vector(10 downto 0) := (others => '0');
-    signal analyzer_interlaced  : std_ulogic := '0';
-    signal analyzer_valid       : std_ulogic := '0';
-    
     signal start_ver_test       : boolean := false;
     signal start_hor_test       : boolean := false;
     signal finished_ver_test    : boolean := false;
     signal finished_hor_test    : boolean := false;
     signal vp                   : video_profile_type;
+    
+    signal measured_vp  : video_profile_type;
     
 BEGIN
     
@@ -82,7 +78,8 @@ BEGIN
             
             PROFILE => PROFILE,
             
-            CLK_OUT => CLK_OUT,
+            CLK_OUT         => CLK_OUT,
+            CLK_OUT_LOCKED  => CLK_OUT_LOCKED,
             
             POS_VSYNC   => POS_VSYNC,
             POS_HSYNC   => POS_HSYNC,
@@ -93,24 +90,6 @@ BEGIN
             RGB_ENABLE  => RGB_ENABLE,
             RGB_X       => RGB_X,
             RGB_Y       => RGB_Y
-        );
-    
-    VIDEO_ANALYZER_inst : entity work.VIDEO_ANALYZER
-        port map (
-            CLK => CLK_OUT,
-            RST => RST,
-            
-            START       => POS_VSYNC,
-            VSYNC       => VSYNC,
-            HSYNC       => HSYNC,
-            RGB_VALID   => RGB_ENABLE,
-            
-            POSITIVE_VSYNC  => analyzer_pos_vsync,
-            POSITIVE_HSYNC  => analyzer_pos_hsync,
-            WIDTH           => analyzer_width,
-            HEIGHT          => analyzer_height,
-            INTERLACED      => analyzer_interlaced,
-            VALID           => analyzer_valid
         );
     
     CLK_IN  <= not CLK_IN after CLK_IN_period/2;
@@ -129,12 +108,15 @@ BEGIN
         
         -- insert stimulus here
         
-        wait until falling_edge(POS_VSYNC);
+        wait until rising_edge(CLK_OUT_LOCKED);
+        
         wait for 1 us;
         
         for profile_i in FIRST_PROFILE to LAST_PROFILE loop
             report "Setting profile " & natural'image(profile_i);
             PROFILE <= stdulv(profile_i, PROFILE_BITS);
+            
+            wait until rising_edge(CLK_OUT_LOCKED);
             
             start_ver_test  <= true;
             start_hor_test  <= true;
@@ -143,8 +125,6 @@ BEGIN
             start_hor_test  <= false;
             
             wait until finished_ver_test and finished_hor_test;
-            wait until analyzer_valid='0';
-            wait until analyzer_valid='1';
             wait for 1 us;
         end loop;
         
@@ -166,11 +146,13 @@ BEGIN
         wait until start_hor_test;
         finished_hor_test   <= false;
         
-        report "Starting horizontal test";
-        cycle_count := 0;
-        state       := HSYNC;
-        
         wait until rising_edge(POS_VSYNC);
+        
+        report "Starting horizontal test";
+        cycle_count                 := 0;
+        measured_vp.h_sync_cycles   <= 0;
+        state                       := HSYNC;
+        
         assert rising_edge(POS_HSYNC)
             report "Initial vertical sync not simultaneous with horizontal sync!"
             severity FAILURE;
@@ -197,8 +179,9 @@ BEGIN
                         cycle_count := 1; -- this was the first front porch cycle
                         state       := H_FRONT_PORCH;
                     else
-                        -- vertical sync period
-                        cycle_count := cycle_count+1;
+                        -- horizontal sync period
+                        cycle_count                 := cycle_count+1;
+                        measured_vp.h_sync_cycles   <= cycle_count;
                     end if;
                 
                 when H_FRONT_PORCH =>
@@ -207,18 +190,21 @@ BEGIN
                         assert cycle_count=vp.h_front_porch+vp.left_border
                             report "Horizontal front porch doesn't match!"
                             severity FAILURE;
-                        cycle_count := 1; -- this was the first RGB cycle
-                        state       := RGB;
+                        cycle_count         := 1; -- this was the first RGB cycle
+                        measured_vp.width   <= 1;
+                        state               := RGB;
                     elsif POS_HSYNC='1' then
                         -- vertical blank period
                         assert cycle_count=vp.h_front_porch+vp.left_border+vp.width+vp.right_border+vp.h_back_porch
                             report "Vertical blank line cycle count doesn't match!"
                             severity FAILURE;
-                        cycle_count := 1; -- this was the first hsync cycle
-                        state       := HSYNC;
+                        cycle_count                 := 1; -- this was the first hsync cycle
+                        measured_vp.h_sync_cycles   <= 1;
+                        state                       := HSYNC;
                     else
                         -- horizontal front porch
-                        cycle_count := cycle_count+1;
+                        cycle_count                 := cycle_count+1;
+                        measured_vp.h_front_porch   <= cycle_count;
                     end if;
                 
                 when RGB =>
@@ -227,11 +213,15 @@ BEGIN
                         assert cycle_count=vp.width
                             report "Width doesn't match!"
                             severity FAILURE;
-                        cycle_count := 1; -- this was the first back porch cycle
-                        state       := H_BACK_PORCH;
+                        cycle_count                 := 1; -- this was the first back porch cycle
+                        measured_vp.h_back_porch    <= 1;
+                        state                       := H_BACK_PORCH;
                     else
                         -- RGB period
-                        cycle_count := cycle_count+1;
+                        cycle_count                 := cycle_count+1;
+                        measured_vp.width           <= cycle_count;
+                        measured_vp.negative_hsync  <= HSYNC='1';
+                        measured_vp.negative_vsync  <= VSYNC='1';
                     end if;
                 
                 when H_BACK_PORCH =>
@@ -243,10 +233,12 @@ BEGIN
                         assert cycle_count=vp.right_border+vp.h_back_porch
                             report "Horizontal back porch doesn't match!"
                             severity FAILURE;
-                        cycle_count := 1;  -- this was the first hsync cycle
-                        state       := HSYNC;
+                        cycle_count                 := 1;  -- this was the first hsync cycle
+                        measured_vp.h_sync_cycles   <= 1;
+                        state                       := HSYNC;
                     else
-                        cycle_count := cycle_count+1;
+                        cycle_count                 := cycle_count+1;
+                        measured_vp.h_back_porch    <= cycle_count;
                     end if;
                 
             end case;
@@ -272,14 +264,16 @@ BEGIN
         wait until start_ver_test;
         finished_ver_test   <= false;
         
-        report "Starting vertical test";
-        line_count              := 1;
-        state                   := VSYNC;
-        interlaced_other_frame  := false;
-        
         wait until rising_edge(POS_VSYNC);
         
-        while not finished_ver_test loop
+        report "Starting vertical test";
+        line_count                  := 1;
+        measured_vp.v_sync_lines    <= 1;
+        measured_vp.interlaced      <= false;
+        state                       := VSYNC;
+        interlaced_other_frame      := false;
+        
+        while true loop
             
             wait until rising_edge(POS_HSYNC) or rising_edge(RGB_ENABLE);
             
@@ -302,7 +296,8 @@ BEGIN
                         state       := V_FRONT_PORCH;
                     else
                         -- vertical sync period
-                        line_count  := line_count+1;
+                        line_count                  := line_count+1;
+                        measured_vp.v_sync_lines    <= line_count;
                     end if;
                 
                 when V_FRONT_PORCH =>
@@ -314,11 +309,13 @@ BEGIN
                         assert line_count=vp.v_front_porch+vp.top_border
                             report "Vertical front porch doesn't match!"
                             severity FAILURE;
-                        line_count  := 1; -- this is the first RGB line
-                        state       := RGB_HSYNC;
+                        line_count          := 1; -- this is the first RGB line
+                        measured_vp.height  <= 1;
+                        state               := RGB_HSYNC;
                     else
                         -- vertical front porch
-                        line_count  := line_count+1;
+                        line_count                  := line_count+1;
+                        measured_vp.v_front_porch   <= line_count;
                     end if;
                 
                 when RGB_HSYNC =>
@@ -328,15 +325,17 @@ BEGIN
                 
                 when RGB =>
                     if RGB_ENABLE='1' then
-                        line_count  := line_count+1;
-                        state       := RGB_HSYNC;
+                        line_count          := line_count+1;
+                        measured_vp.height  <= line_count;
+                        state               := RGB_HSYNC;
                     else
                         -- first line of vertical back porch
                         assert line_count=vp.height
                             report "Height doesn't match!"
                             severity FAILURE;
-                        line_count  := 1; -- this was the first blanking line
-                        state       := V_BACK_PORCH;
+                        line_count                  := 1; -- this was the first blanking line
+                        measured_vp.v_back_porch    <= 1;
+                        state                       := V_BACK_PORCH;
                     end if;
                 
                 when V_BACK_PORCH =>
@@ -349,18 +348,22 @@ BEGIN
                             assert line_count+1=vp.v_back_porch+vp.bottom_border
                                 report "Vertical back porch doesn't match!"
                                 severity FAILURE;
-                            finished_ver_test   <= true;
+                            exit;
                         else
                             assert line_count+1=vp.v_back_porch+vp.bottom_border+1
                                 report "Vertical back porch doesn't match!"
                                 severity FAILURE;
                             -- for interlacing, test both half-frames
-                            interlaced_other_frame  := not interlaced_other_frame;
-                            line_count              := 1; -- this is the first vsync line
-                            state                   := VSYNC;
+                            interlaced_other_frame      := not interlaced_other_frame;
+                            line_count                  := 1; -- this is the first vsync line
+                            measured_vp.v_sync_lines    <= 1;
+                            measured_vp.interlaced      <= true;
+                            state                       := VSYNC;
                         end if;
                     else
-                        line_count  := line_count+1;
+                        -- vertical back porch
+                        line_count                  := line_count+1;
+                        measured_vp.v_back_porch    <= line_count;
                     end if;
                 
             end case;

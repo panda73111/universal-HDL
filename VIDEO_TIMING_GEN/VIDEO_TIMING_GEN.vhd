@@ -31,7 +31,8 @@ entity VIDEO_TIMING_GEN is
         
         PROFILE : in std_ulogic_vector(PROFILE_BITS-1 downto 0);
         
-        CLK_OUT : out std_ulogic := '0';
+        CLK_OUT         : out std_ulogic := '0';
+        CLK_OUT_LOCKED  : out std_ulogic := '0';
         
         POS_VSYNC   : out std_ulogic := '0';
         POS_HSYNC   : out std_ulogic := '0';
@@ -98,7 +99,8 @@ architecture rtl of VIDEO_TIMING_GEN is
     
 begin
     
-    CLK_OUT <= pix_clk;
+    CLK_OUT         <= pix_clk;
+    CLK_OUT_LOCKED  <= clk_locked;
     
     POS_VSYNC   <= cur_reg.pos_vsync;
     POS_HSYNC   <= cur_reg.pos_hsync;
@@ -120,6 +122,8 @@ begin
     
     reprog_mult <= stdulv(vp.clk10_mult*CLK_IN_TO_CLK10_MULT, 8);
     reprog_div  <= stdulv(vp.clk10_div*CLK_IN_TO_CLK10_DIV, 8);
+    
+    rst_stm <= not clk_locked;
     
     CLK_MAN_inst : entity work.CLK_MAN
         generic map (
@@ -145,9 +149,7 @@ begin
             cur_profile <= (others => '0');
             profile_set <= false;
             reprog_en   <= '0';
-            rst_stm     <= '1';
         elsif rising_edge(CLK_IN) then
-            rst_stm     <= '0';
             reprog_en   <= '0';
             if PROFILE/=cur_profile then
                 profile_set <= false;
@@ -159,12 +161,11 @@ begin
                 reprog_en   <= '1';
                 cur_profile <= PROFILE;
                 profile_set <= true;
-                rst_stm     <= '1';
             end if;
         end if;
     end process;
     
-    stm_proc : process(rst_stm, cur_reg, vp, PROFILE)
+    stm_proc : process(rst_stm, cur_reg, vp, PROFILE, total_hor_pixels, total_ver_lines)
         alias cr is cur_reg;
         alias x is cr.x;
         alias y is cr.y;
