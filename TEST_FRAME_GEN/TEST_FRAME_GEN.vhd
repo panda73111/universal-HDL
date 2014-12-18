@@ -6,9 +6,11 @@ use work.video_profiles.all;
 
 entity TEST_FRAME_GEN is
     generic (
-        CLK_IN_PERIOD           : real;
+        CLK_IN_PERIOD           : real := 50.0;
         FRAME_STEP              : natural := 200;
         ANIMATED                : boolean := false;
+        -- SIMPLE_PATTERN=false should only be used for simulation or testing (excessive multiplication)!!
+        SIMPLE_PATTERN          : boolean := true;
         R_BITS                  : natural range 1 to 12 := 8;
         G_BITS                  : natural range 1 to 12 := 8;
         B_BITS                  : natural range 1 to 12 := 8;
@@ -136,8 +138,13 @@ begin
         if vp.width=0 or vp.height=0 or rgb_enable_out='0' then
             x_grad  := (others => '0');
             y_grad  := (others => '0');
+        elsif SIMPLE_PATTERN then
+            -- repeated gradient squares instead of one gradient across the frame
+            x_grad  := resize(uns(x(7 downto 0)), MAX_BITS+1);
+            y_grad  := resize(uns(y(7 downto 0)), MAX_BITS+1);
         else
             if ANIMATED then
+                -- gains the maximum brightness from 0 to 1 from frame 0 to FRAME_STEP of that pattern
                 frame_perc  := (frame_count mod FRAME_STEP) * 100 / FRAME_STEP;
                 x_grad      := uns(((nat(x)*1000*frame_perc/100)/vp.width*GRAD_LIMIT)/1000, MAX_BITS+1);
                 y_grad      := uns(((nat(y)*1000*frame_perc/100)/vp.height*GRAD_LIMIT)/1000, MAX_BITS+1);
@@ -146,7 +153,7 @@ begin
                 y_grad  := uns(((nat(y)*1000)/vp.height*GRAD_LIMIT)/1000, MAX_BITS+1);
             end if;
         end if;
-      
+        
         x_grad_inv  := GRAD_LIMIT-x_grad;
         y_grad_inv  := GRAD_LIMIT-y_grad;
         xy0_grad    := resize((x_grad+y_grad)/2, MAX_BITS);
