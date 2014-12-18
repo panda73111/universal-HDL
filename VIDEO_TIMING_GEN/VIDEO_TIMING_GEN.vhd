@@ -18,7 +18,7 @@ use work.video_profiles.all;
 
 entity VIDEO_TIMING_GEN is
     generic (
-        CLK_IN_PERIOD           : real;
+        CLK_IN_PERIOD           : real := 50.0;
         CLK_IN_TO_CLK10_MULT    : natural := 1;
         CLK_IN_TO_CLK10_DIV     : natural := 2;
         PROFILE_BITS            : natural := log2(VIDEO_PROFILE_COUNT);
@@ -51,9 +51,7 @@ architecture rtl of VIDEO_TIMING_GEN is
     type state_type is (
         HOR_SYNC,
         HOR_FRONT_PORCH,
-        LEFT_BORDER,
         PIXEL,
-        RIGHT_BORDER,
         HOR_BACK_PORCH
     );
     
@@ -97,6 +95,9 @@ architecture rtl of VIDEO_TIMING_GEN is
     signal reprog_en    : std_ulogic := '0';
     signal rst_stm      : std_ulogic := '1';
     
+    signal v_sync_end, v_rgb_start, v_rgb_end   : natural range 0 to 2**(Y_BITS+1)-1 := 0;
+    signal h_sync_end, h_rgb_start, h_rgb_end   : natural range 0 to 2**(X_BITS+1)-1 := 0;
+    
 begin
     
     CLK_OUT         <= pix_clk;
@@ -119,6 +120,14 @@ begin
     
     total_hor_pixels    <= vp.h_sync_cycles + vp.h_front_porch + vp.left_border + vp.width +
                             vp.right_border + vp.h_back_porch;
+    
+    v_sync_end  <= vp.v_sync_lines;
+    v_rgb_start <= vp.v_sync_lines+vp.v_front_porch+vp.top_border+cur_reg.extra_blank_line;
+    v_rgb_end   <= vp.v_sync_lines+vp.v_front_porch+vp.top_border+cur_reg.extra_blank_line+vp.height;
+    
+    h_sync_end  <= vp.h_sync_cycles;
+    h_rgb_start <= vp.h_sync_cycles+vp.h_front_porch+vp.left_border;
+    h_rgb_end   <= vp.h_sync_cycles+vp.h_front_porch+vp.left_border+vp.width;
     
     reprog_mult <= stdulv(vp.clk10_mult*CLK_IN_TO_CLK10_MULT, 8);
     reprog_div  <= stdulv(vp.clk10_div*CLK_IN_TO_CLK10_DIV, 8);
@@ -165,7 +174,8 @@ begin
         end if;
     end process;
     
-    stm_proc : process(rst_stm, cur_reg, vp, PROFILE, total_hor_pixels, total_ver_lines)
+    stm_proc : process(rst_stm, cur_reg, vp, PROFILE, total_hor_pixels, total_ver_lines,
+        v_sync_end, v_rgb_start, v_rgb_end, h_sync_end, h_rgb_start, h_rgb_end)
         alias cr is cur_reg;
         alias x is cr.x;
         alias y is cr.y;
@@ -181,19 +191,20 @@ begin
             cr.extra_blank_line=0 or
             x=total_hor_pixels/2 -- vsync offset every other interlaced frame
         then
+            -- vertical synchronisation
             if y=0 then
-                -- vsync period
                 r.pos_vsync := '1';
             end if;
-            if y=vp.v_sync_lines then
+            if y=v_sync_end then
                 r.pos_vsync := '0';
             end if;
         end if;
         
-        if y=vp.v_sync_lines+vp.v_front_porch+vp.top_border+cr.extra_blank_line then
+        -- vertical RGB enable
+        if y=v_rgb_start then
             r.ver_rgb_enable    := '1';
         end if;
-        if y=vp.v_sync_lines+vp.v_front_porch+vp.top_border+cr.extra_blank_line+vp.height then
+        if y=v_rgb_end then
             r.ver_rgb_enable    := '0';
         end if;
         
@@ -201,34 +212,18 @@ begin
             
             when HOR_SYNC =>
                 r.pos_hsync := '1';
-                if x=vp.h_sync_cycles-1 then
+                if x=h_sync_end-1 then
                     r.state := HOR_FRONT_PORCH;
                 end if;
             
             when HOR_FRONT_PORCH =>
-                if x=vp.h_sync_cycles+vp.h_front_porch-1 then
-                    r.state := LEFT_BORDER;
-                    if vp.left_border=0 then
-                        r.state := PIXEL;
-                    end if;
-                end if;
-            
-            when LEFT_BORDER =>
-                if x=vp.h_sync_cycles+vp.h_front_porch+vp.left_border-1 then
+                if x=h_rgb_start-1 then
                     r.state := PIXEL;
                 end if;
             
             when PIXEL =>
                 r.hor_rgb_enable    := '1';
-                if x=vp.h_sync_cycles+vp.h_front_porch+vp.left_border+vp.width-1 then
-                    r.state := RIGHT_BORDER;
-                    if vp.right_border=0 then
-                        r.state := HOR_BACK_PORCH;
-                    end if;
-                end if;
-            
-            when RIGHT_BORDER =>
-                if x=vp.h_sync_cycles+vp.h_front_porch+vp.left_border+vp.width+vp.right_border-1 then
+                if x=h_rgb_end-1 then
                     r.state := HOR_BACK_PORCH;
                 end if;
             
