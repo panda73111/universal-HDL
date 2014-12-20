@@ -31,7 +31,7 @@ package video_profiles is
         array(0 to VIDEO_PROFILE_COUNT-1)
         of video_profile_type;
     
-    constant video_profiles : video_profiles_type := (
+    constant VIDEO_PROFILES : video_profiles_type := (
         0 => ( -- 640x480p, 60Hz
             width           => 640,
             height          => 480,

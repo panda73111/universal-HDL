@@ -48,9 +48,7 @@ ARCHITECTURE rtl OF TEST_FRAME_GEN_tb IS
     signal HSYNC        : std_ulogic;
     signal VSYNC        : std_ulogic;
     signal RGB_ENABLE   : std_ulogic;
-    signal R            : std_ulogic_vector(R_BITS-1 downto 0);
-    signal G            : std_ulogic_vector(G_BITS-1 downto 0);
-    signal B            : std_ulogic_vector(B_BITS-1 downto 0);
+    signal RGB          : std_ulogic_vector(R_BITS+G_BITS+B_BITS-1 downto 0);
     
     constant CLK_IN_period      : time := 50 ns; -- 20 MHz
     constant CLK_IN_period_real : real := real(CLK_IN_period / 1 ps) / real(1 ns / 1 ps);
@@ -82,9 +80,7 @@ BEGIN
             HSYNC       => HSYNC,
             VSYNC       => VSYNC,
             RGB_ENABLE  => RGB_ENABLE,
-            R           => R,
-            G           => G,
-            B           => B
+            RGB         => RGB
         );
     
     CLK_IN  <= not CLK_IN after CLK_IN_period/2;

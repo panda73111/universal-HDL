@@ -6,7 +6,7 @@ use work.video_profiles.all;
 
 entity TEST_FRAME_GEN is
     generic (
-        CLK_IN_PERIOD           : real := 50.0;
+        CLK_IN_PERIOD           : real;
         FRAME_STEP              : natural := 200;
         ANIMATED                : boolean := false;
         -- SIMPLE_PATTERN=false should only be used for simulation or testing (excessive multiplication)!!
@@ -33,9 +33,7 @@ entity TEST_FRAME_GEN is
         HSYNC       : out std_ulogic := '0';
         VSYNC       : out std_ulogic := '0';
         RGB_ENABLE  : out std_ulogic := '0';
-        R           : out std_ulogic_vector(R_BITS-1 downto 0) := (others => '0');
-        G           : out std_ulogic_vector(G_BITS-1 downto 0) := (others => '0');
-        B           : out std_ulogic_vector(B_BITS-1 downto 0) := (others => '0')
+        RGB         : out std_ulogic_vector(R_BITS+G_BITS+B_BITS-1 downto 0) := (others => '0')
     );
 end TEST_FRAME_GEN;
 
@@ -49,8 +47,8 @@ architecture rtl of TEST_FRAME_GEN is
     
     type reg_type is record
         r   : std_ulogic_vector(R_BITS-1 downto 0);
-        g   : std_ulogic_vector(R_BITS-1 downto 0);
-        b   : std_ulogic_vector(R_BITS-1 downto 0);
+        g   : std_ulogic_vector(G_BITS-1 downto 0);
+        b   : std_ulogic_vector(B_BITS-1 downto 0);
     end record;
     
     constant reg_type_def    : reg_type := (
@@ -86,16 +84,14 @@ begin
     CLK_OUT         <= pix_clk;
     CLK_OUT_LOCKED  <= pix_clk_locked;
     
-    R   <= cur_reg.r;
-    G   <= cur_reg.g;
-    B   <= cur_reg.b;
+    RGB <= cur_reg.r & cur_reg.g & cur_reg.g;
     
     HSYNC   <= hsync_q;
     VSYNC   <= vsync_q;
     
     RGB_ENABLE  <= rgb_enable_q;
     
-    vp  <= video_profiles(int(PROFILE));
+    vp  <= video_profiles(nat(PROFILE));
     
     VIDEO_TIMING_GEN_inst : entity work.VIDEO_TIMING_GEN
         generic map (
