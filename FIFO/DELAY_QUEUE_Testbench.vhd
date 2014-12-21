@@ -50,12 +50,21 @@ BEGIN
     begin		
         -- hold reset state for 100 ns.
         RST <= '1';
-        wait for 100 ns;	
-        RSt <= '0';
+        wait for 100 ns;
+        RST <= '0';
         wait for CLK_period*10;
         wait until rising_edge(CLK);
         
         -- insert stimulus here
+
+        for i in 0 to 200 loop
+            
+            DIN <= stdulv(i, WIDTH);
+            wait until rising_edge(CLK);
+            
+        end loop;
+        
+        wait for CLK_period*100;
 
         for i in 0 to 200 loop
             
