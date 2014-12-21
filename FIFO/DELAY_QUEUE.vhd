@@ -5,52 +5,61 @@ use IEEE.NUMERIC_STD.ALL;
 use work.help_funcs.all;
 
 entity DELAY_QUEUE is
-  generic (
-    CYCLES  : integer := 10;
-    DATA_WIDTH  : integer := 8
+    generic (
+        CYCLES  : natural := 10;
+        WIDTH   : natural := 8
     );
-  port (
-    CLK : in std_logic;
-    
-    DATA_IN : in std_logic_vector(DATA_WIDTH-1 downto 0);
---    ENABLE  : in std_logic := '1';
-    
-    DATA_OUT  : out std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0')
+    port (
+        CLK : in std_ulogic;
+        RST : in std_ulogic;
+        
+        DIN : in std_ulogic_vector(WIDTH-1 downto 0);
+        EN  : in std_ulogic := '1';
+        
+        DOUT    : out std_ulogic_vector(WIDTH-1 downto 0) := (others => '0')
     );
 end DELAY_QUEUE;
 
 architecture Behavioral of DELAY_QUEUE is
-  type ram_type is array(0 to CYCLES-1) of std_logic_vector(DATA_WIDTH-1 downto 0);
-  signal ram  : ram_type := (others => (others => '0'));
-  signal wr_a : integer range 0 to CYCLES-1 := 0;
-  signal rd_a : integer range 0 to CYCLES-1 := 1;
-  signal data_out_buf : std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0');
-  attribute ram_style : string;
-  attribute ram_style of ram  : signal is "BLOCK";
-begin
-  
-  data_out_buf  <= ram(rd_a);
-  
-  process(CLK)
-  begin
-    if rising_edge(CLK) then
     
-      ram(wr_a) <= DATA_IN;
-      DATA_OUT  <= data_out_buf;
-      
---      rd_a  <= (rd_a + 1) mod CYCLES;
---      wr_a  <= (wr_a + 1) mod CYCLES;
-      rd_a  <= rd_a + 1;
-      if rd_a = CYCLES-1 then
-        rd_a  <= 0;
-      end if;
-      wr_a  <= wr_a + 1;
-      if wr_a = CYCLES-1 then
-        wr_a  <= 0;
-      end if;
-      
-    end if;
-  end process;
-  
+    signal start        : std_ulogic := '0';
+    signal cycle_count  : unsigned(log2(CYCLES) downto 0) := uns(CYCLES-2, log2(CYCLES)+1);
+    signal rd_en        : std_ulogic := '0';
+    signal wr_en        : std_ulogic := '0';
+    
+begin
+    
+    rd_en   <= cycle_count(cycle_count'high) and EN;
+    wr_en   <= start and EN;
+    
+    ASYNC_FIFO_inst : entity work.ASYNC_FIFO
+        generic map (
+            WIDTH   => WIDTH,
+            DEPTH   => 2**log2(CYCLES)
+        )
+        port map (
+            CLK => CLK,
+            RST => RST,
+            
+            DIN     => DIN,
+            RD_EN   => rd_en,
+            WR_EN   => wr_en,
+            
+            DOUT    => DOUT
+        );
+    
+    count_proc : process(CLK, RST)
+    begin
+        if RST='1' then
+            start       <= '0';
+            cycle_count <= uns(CYCLES-2, log2(CYCLES)+1);
+        elsif rising_edge(CLK) then
+            start   <= '1';
+            if cycle_count(cycle_count'high)='0' and start='1' and EN='1' then
+                cycle_count <= cycle_count-1;
+            end if;
+        end if;
+    end process;
+    
 end Behavioral;
 

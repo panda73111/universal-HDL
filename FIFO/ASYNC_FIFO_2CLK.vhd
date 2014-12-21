@@ -109,15 +109,15 @@ begin
             missing_cnt <= 0;
             -- pragma translate_on
         elsif rising_edge(count_clk) then
-            if WR_EN='1' and cnt_u/=DEPTH then
+            if WR_EN='1' and RD_EN='0' and cnt_u/=DEPTH then
                 cnt_u   <= cnt_u+1;
-            elsif RD_EN='1' and cnt_u/=0 then
+            elsif RD_EN='1' and WR_EN='0' and cnt_u/=0 then
                 cnt_u   <= cnt_u-1;
             end if;
             
             -- pragma translate_off
             -- debugging
-            if WR_EN='1' and cnt_u=DEPTH then
+            if WR_EN='1' and RD_EN='0' and cnt_u=DEPTH then
                 missing_cnt <= missing_cnt+1;
             end if;
             if cnt_u>used_cnt then
