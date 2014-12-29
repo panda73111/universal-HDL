@@ -110,24 +110,24 @@ begin
     X           <= x_q;
     Y           <= y_q;
     RGB_ENABLE  <= cur_reg.ver_rgb_enable and cur_reg.hor_rgb_enable;
-    RGB_X       <= x_q-vp.h_sync_cycles-vp.h_front_porch-vp.left_border;
-    RGB_Y       <= y_q-vp.v_sync_lines-vp.v_front_porch-vp.top_border;
+    RGB_X       <= x_q-vp.h_sync_cycles-vp.h_front_porch;
+    RGB_Y       <= y_q-vp.v_sync_lines-vp.v_front_porch;
     
     vp  <= video_profiles(int(PROFILE));
     
-    total_ver_lines     <= vp.v_sync_lines + vp.v_front_porch + vp.top_border + vp.height +
-                            vp.bottom_border + vp.v_back_porch + cur_reg.extra_blank_line;
+    total_ver_lines     <= vp.v_sync_lines + vp.v_front_porch + vp.height +
+                            vp.v_back_porch + cur_reg.extra_blank_line;
     
-    total_hor_pixels    <= vp.h_sync_cycles + vp.h_front_porch + vp.left_border + vp.width +
-                            vp.right_border + vp.h_back_porch;
+    total_hor_pixels    <= vp.h_sync_cycles + vp.h_front_porch + vp.width +
+                            vp.h_back_porch;
     
     v_sync_end  <= vp.v_sync_lines;
-    v_rgb_start <= vp.v_sync_lines+vp.v_front_porch+vp.top_border+cur_reg.extra_blank_line;
-    v_rgb_end   <= vp.v_sync_lines+vp.v_front_porch+vp.top_border+cur_reg.extra_blank_line+vp.height;
+    v_rgb_start <= vp.v_sync_lines+vp.v_front_porch+cur_reg.extra_blank_line;
+    v_rgb_end   <= vp.v_sync_lines+vp.v_front_porch+cur_reg.extra_blank_line+vp.height;
     
     h_sync_end  <= vp.h_sync_cycles;
-    h_rgb_start <= vp.h_sync_cycles+vp.h_front_porch+vp.left_border;
-    h_rgb_end   <= vp.h_sync_cycles+vp.h_front_porch+vp.left_border+vp.width;
+    h_rgb_start <= vp.h_sync_cycles+vp.h_front_porch;
+    h_rgb_end   <= vp.h_sync_cycles+vp.h_front_porch+vp.width;
     
     reprog_mult <= stdulv(vp.clk10_mult*CLK_IN_TO_CLK10_MULT, 8);
     reprog_div  <= stdulv(vp.clk10_div*CLK_IN_TO_CLK10_DIV, 8);

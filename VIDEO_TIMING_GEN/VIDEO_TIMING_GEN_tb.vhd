@@ -187,7 +187,7 @@ BEGIN
                 when H_FRONT_PORCH =>
                     if RGB_ENABLE='1' then
                         -- transition to active RGB lines
-                        assert cycle_count=vp.h_front_porch+vp.left_border
+                        assert cycle_count=vp.h_front_porch
                             report "Horizontal front porch doesn't match!"
                             severity FAILURE;
                         cycle_count         := 1; -- this was the first RGB cycle
@@ -195,7 +195,7 @@ BEGIN
                         state               := RGB;
                     elsif POS_HSYNC='1' then
                         -- vertical blank period
-                        assert cycle_count=vp.h_front_porch+vp.left_border+vp.width+vp.right_border+vp.h_back_porch
+                        assert cycle_count=vp.h_front_porch+vp.width+vp.h_back_porch
                             report "Vertical blank line cycle count doesn't match!"
                             severity FAILURE;
                         cycle_count                 := 1; -- this was the first hsync cycle
@@ -230,7 +230,7 @@ BEGIN
                         severity FAILURE;
                     if POS_HSYNC='1' then
                         -- transition to horizontal sync
-                        assert cycle_count=vp.right_border+vp.h_back_porch
+                        assert cycle_count=vp.h_back_porch
                             report "Horizontal back porch doesn't match!"
                             severity FAILURE;
                         cycle_count                 := 1;  -- this was the first hsync cycle
@@ -306,7 +306,7 @@ BEGIN
                         severity FAILURE;
                     if RGB_ENABLE='1' then
                         -- transition to active RGB lines
-                        assert line_count=vp.v_front_porch+vp.top_border
+                        assert line_count=vp.v_front_porch
                             report "Vertical front porch doesn't match!"
                             severity FAILURE;
                         line_count          := 1; -- this is the first RGB line
@@ -345,12 +345,12 @@ BEGIN
                     if POS_VSYNC='1' then
                         -- transition to vertical sync
                         if not vp.interlaced or interlaced_other_frame then
-                            assert line_count+1=vp.v_back_porch+vp.bottom_border
+                            assert line_count+1=vp.v_back_porch
                                 report "Vertical back porch doesn't match!"
                                 severity FAILURE;
                             exit;
                         else
-                            assert line_count+1=vp.v_back_porch+vp.bottom_border+1
+                            assert line_count+1=vp.v_back_porch+1
                                 report "Vertical back porch doesn't match!"
                                 severity FAILURE;
                             -- for interlacing, test both half-frames

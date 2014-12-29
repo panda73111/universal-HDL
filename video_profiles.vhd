@@ -4,7 +4,7 @@ use IEEE.STD_LOGIC_1164.all;
 
 package video_profiles is
     
-    constant VIDEO_PROFILE_COUNT    : natural := 6;
+    constant VIDEO_PROFILE_COUNT    : natural := 7;
     
     type video_profile_type is record
         width           : natural;
@@ -15,10 +15,6 @@ package video_profiles is
         interlaced      : boolean;
         negative_vsync  : boolean;
         negative_hsync  : boolean;
-        top_border      : natural; -- lines
-        bottom_border   : natural; -- lines
-        left_border     : natural; -- pixels
-        right_border    : natural; -- pixels
         h_front_porch   : natural; -- pixels
         h_back_porch    : natural; -- pixels
         h_sync_cycles   : natural; -- pixels
@@ -32,7 +28,23 @@ package video_profiles is
         of video_profile_type;
     
     constant VIDEO_PROFILES : video_profiles_type := (
-        0 => ( -- 640x480p, 60Hz
+        0 => ( -- 320x240p, 60Hz
+            width           => 320,
+            height          => 240,
+            pixel_period    => 133.3 ns,
+            clk10_mult      => 3, -- 7.5 Mhz
+            clk10_div       => 4,
+            interlaced      => false,
+            negative_vsync  => true,
+            negative_hsync  => true,
+            h_front_porch   => 33,
+            h_back_porch    => 69,
+            h_sync_cycles   => 31,
+            v_front_porch   => 3,
+            v_back_porch    => 18,
+            v_sync_lines    => 6
+        ),
+        1 => ( -- 640x480p, 60Hz
             width           => 640,
             height          => 480,
             pixel_period    => 39.7 ns,
@@ -41,18 +53,14 @@ package video_profiles is
             interlaced      => false,
             negative_vsync  => true,
             negative_hsync  => true,
-            top_border      => 8,
-            bottom_border   => 8,
-            left_border     => 8,
-            right_border    => 8,
-            h_front_porch   => 8,
-            h_back_porch    => 40,
+            h_front_porch   => 10,
+            h_back_porch    => 48,
             h_sync_cycles   => 96,
-            v_front_porch   => 2,
-            v_back_porch    => 25,
+            v_front_porch   => 10,
+            v_back_porch    => 33,
             v_sync_lines    => 2
         ),
-        1 => ( -- 1024x768p, 75Hz
+        2 => ( -- 1024x768p, 75Hz
             width           => 1024,
             height          => 768,
             pixel_period    => 12.7 ns,
@@ -61,10 +69,6 @@ package video_profiles is
             interlaced      => false,
             negative_vsync  => false,
             negative_hsync  => false,
-            top_border      => 0,
-            bottom_border   => 0,
-            left_border     => 0,
-            right_border    => 0,
             h_front_porch   => 16,
             h_back_porch    => 176,
             h_sync_cycles   => 96,
@@ -72,7 +76,7 @@ package video_profiles is
             v_back_porch    => 28,
             v_sync_lines    => 3
         ),
-        2 => ( -- 1280x720p, 60Hz
+        3 => ( -- 1280x720p, 60Hz
             width           => 1280,
             height          => 720,
             pixel_period    => 13.5 ns,
@@ -81,10 +85,6 @@ package video_profiles is
             interlaced      => false,
             negative_vsync  => false,
             negative_hsync  => false,
-            top_border      => 0,
-            bottom_border   => 0,
-            left_border     => 0,
-            right_border    => 0,
             h_front_porch   => 110,
             h_back_porch    => 220,
             h_sync_cycles   => 40,
@@ -92,7 +92,7 @@ package video_profiles is
             v_back_porch    => 20,
             v_sync_lines    => 5
         ),
-        3 => ( -- 1920x1080p, 30Hz
+        4 => ( -- 1920x1080p, 30Hz
             width           => 1920,
             height          => 1080,
             pixel_period    => 13.5 ns,
@@ -101,10 +101,6 @@ package video_profiles is
             interlaced      => false,
             negative_vsync  => false,
             negative_hsync  => false,
-            top_border      => 0,
-            bottom_border   => 0,
-            left_border     => 0,
-            right_border    => 0,
             h_front_porch   => 148,
             h_back_porch    => 88,
             h_sync_cycles   => 44,
@@ -112,7 +108,7 @@ package video_profiles is
             v_back_porch    => 4,
             v_sync_lines    => 5
         ),
-        4 => ( -- 1920x1080i, 60Hz
+        5 => ( -- 1920x1080i, 60Hz
             width           => 1920,
             height          => 540,
             pixel_period    => 13.5 ns,
@@ -121,10 +117,6 @@ package video_profiles is
             interlaced      => true,
             negative_vsync  => false,
             negative_hsync  => false,
-            top_border      => 0,
-            bottom_border   => 0,
-            left_border     => 0,
-            right_border    => 0,
             h_front_porch   => 148,
             h_back_porch    => 88,
             h_sync_cycles   => 44,
@@ -132,7 +124,7 @@ package video_profiles is
             v_back_porch    => 15,
             v_sync_lines    => 5
         ),
-        5 => ( -- 1920x1080p, 60Hz
+        6 => ( -- 1920x1080p, 60Hz
             width           => 1920,
             height          => 1080,
             pixel_period    => 6.7 ns,
@@ -141,10 +133,6 @@ package video_profiles is
             interlaced      => false,
             negative_vsync  => false,
             negative_hsync  => false,
-            top_border      => 0,
-            bottom_border   => 0,
-            left_border     => 0,
-            right_border    => 0,
             h_front_porch   => 148,
             h_back_porch    => 88,
             h_sync_cycles   => 44,
