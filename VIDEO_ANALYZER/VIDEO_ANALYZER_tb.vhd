@@ -2,7 +2,7 @@
 -- Engineer: Sebastian Huether
 --
 -- Create Date:   09:57:23 12/08/2014
--- Module Name:   C:/Users/hudini/GitHub/VHDL/pandaLight-HDL/VIDEO_ANALYZER/VIDEO_ANALYZER_tb.vhd
+-- Module Name:   VIDEO_ANALYZER_tb.vhd
 -- Project Name:  VIDEO_ANALYZER
 -- Tool versions: Xilinx ISE 14.7
 -- Description:   
@@ -89,11 +89,11 @@ BEGIN
             report "Starting test " & natural'image(test_index);
             vp                  := video_profiles(test_index);
             
-            total_ver_lines     := vp.v_sync_lines + vp.v_front_porch + vp.top_border + vp.height +
-                                    vp.bottom_border + vp.v_back_porch + sel(vp.interlaced, 1, 0);
+            total_ver_lines     := vp.v_sync_lines+vp.v_front_porch+vp.height+
+                                    vp.v_back_porch+sel(vp.interlaced, 1, 0);
             
-            total_hor_pixels    := vp.h_sync_cycles + vp.h_front_porch + vp.left_border + vp.width +
-                                    vp.right_border + vp.h_back_porch;
+            total_hor_pixels    := vp.h_sync_cycles+vp.h_front_porch+vp.width+
+                                    vp.h_back_porch;
             
             pix_period  <= video_profiles(test_index).pixel_period;
             START       <= '1';
@@ -125,12 +125,12 @@ BEGIN
                         elsif x < vp.h_sync_cycles + vp.h_front_porch then
                             -- horizontal front porch period
                             pos_hsync   := '0';
-                        elsif x < vp.h_sync_cycles + vp.h_front_porch + vp.left_border then
+                        elsif x < vp.h_sync_cycles+vp.h_front_porch then
                             -- left border period
-                        elsif x < vp.h_sync_cycles + vp.h_front_porch + vp.left_border + vp.width then
+                        elsif x < vp.h_sync_cycles+vp.h_front_porch+vp.width then
                             if
-                                y >= vp.v_sync_lines + vp.v_front_porch + vp.top_border and
-                                y < vp.v_sync_lines + vp.v_front_porch + vp.top_border + vp.height
+                                y >= vp.v_sync_lines+vp.v_front_porch and
+                                y < vp.v_sync_lines+vp.v_front_porch+vp.height
                             then
                                 -- active pixels
                                 RGB_VALID   <= '1';

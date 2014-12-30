@@ -109,8 +109,6 @@ begin
                 end if;
             
             when WAIT_FOR_RGB_VALID =>
-                r.tmp_width     := (others => '0');
-                r.tmp_height    := (others => '0');
                 if RGB_VALID='1' then
                     r.vsync_pol := VSYNC;
                     r.hsync_pol := HSYNC;
@@ -119,10 +117,7 @@ begin
             
             when WAIT_FOR_FRAME_END =>
                 if pos_vsync='1' then
-                    r.state := WAIT_FOR_FRAME_BEGINNING;
-                    if cr.valid='0' then
-                        r.state := CHECK_IF_INTERLACED;
-                    end if;
+                    r.state := CHECK_IF_INTERLACED;
                 end if;
             
             when CHECK_IF_INTERLACED =>
@@ -133,6 +128,8 @@ begin
                 r.state := WAIT_FOR_FRAME_BEGINNING;
             
             when WAIT_FOR_FRAME_BEGINNING =>
+                r.tmp_width     := (others => '0');
+                r.tmp_height    := (others => '0');
                 if pos_vsync='0' then
                     -- falling edge of positive VSYNC
                     r.state := WAIT_FOR_FIRST_LINE_BEGINNING;
@@ -168,31 +165,30 @@ begin
                 if pos_vsync='1' then
                     -- rising edge of positive VSYNC
                     r.state := FINISHED;
-                    if cr.valid='1' then
+                    if not cr.first_run then
                         r.state := REVALIDATE;
                     end if;
                 end if;
             
             when FINISHED =>
-                if not cr.first_run then
-                    r.valid     := '1';
-                end if;
                 r.width     := cr.tmp_width;
                 r.height    := cr.tmp_height;
                 r.first_run := false;
-                r.state     := WAIT_FOR_RGB_VALID;
+                r.state     := CHECK_IF_INTERLACED;
             
             when REVALIDATE =>
+                r.valid := '1';
+                r.state := WAIT_FOR_FRAME_BEGINNING;
                 if
                     cr.tmp_width/=cr.width or
                     cr.tmp_height/=cr.height
                 then
-                    -- try again next frame
+                    -- mismatch, try again next frame
                     r.first_run     := true;
                     r.interlaced    := '0';
                     r.valid         := '0';
+                    r.state         := WAIT_FOR_RGB_VALID;
                 end if;
-                r.state := WAIT_FOR_RGB_VALID;
             
         end case;
         
