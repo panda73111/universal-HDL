@@ -95,7 +95,7 @@ begin
     pos_vsync   <= VSYNC xor cur_reg.vsync_pol;
     pos_hsync   <= HSYNC xor cur_reg.hsync_pol;
     
-    stm_proc : process(RST, cur_reg, START, VSYNC, HSYNC, RGB_VALID, pos_vsync)
+    stm_proc : process(RST, cur_reg, START, VSYNC, HSYNC, RGB_VALID, pos_vsync, pos_hsync)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
