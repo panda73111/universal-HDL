@@ -30,10 +30,12 @@ entity TEST_FRAME_GEN is
         CLK_OUT         : out std_ulogic := '0';
         CLK_OUT_LOCKED  : out std_ulogic := '0';
         
-        HSYNC       : out std_ulogic := '0';
-        VSYNC       : out std_ulogic := '0';
-        RGB_ENABLE  : out std_ulogic := '0';
-        RGB         : out std_ulogic_vector(R_BITS+G_BITS+B_BITS-1 downto 0) := (others => '0')
+        POSITIVE_HSYNC  : out std_ulogic := '0';
+        POSITIVE_VSYNC  : out std_ulogic := '0';
+        HSYNC           : out std_ulogic := '0';
+        VSYNC           : out std_ulogic := '0';
+        RGB_ENABLE      : out std_ulogic := '0';
+        RGB             : out std_ulogic_vector(R_BITS+G_BITS+B_BITS-1 downto 0) := (others => '0')
     );
 end TEST_FRAME_GEN;
 
@@ -70,6 +72,7 @@ architecture rtl of TEST_FRAME_GEN is
     signal pos_vsync    : std_ulogic := '0';
     signal pos_vsync_q  : std_ulogic := '0';
     signal pos_hsync    : std_ulogic := '0';
+    signal pos_hsync_q  : std_ulogic := '0';
     
     signal hsync_out    : std_ulogic := '0';
     signal vsync_out    : std_ulogic := '0';
@@ -79,19 +82,25 @@ architecture rtl of TEST_FRAME_GEN is
     signal rgb_enable_out   : std_ulogic := '0';
     signal rgb_enable_q     : std_ulogic := '0';
     
+    signal rst_stm  : std_ulogic := '0';
+    
 begin
     
     CLK_OUT         <= pix_clk;
     CLK_OUT_LOCKED  <= pix_clk_locked;
     
-    RGB <= cur_reg.r & cur_reg.g & cur_reg.g;
+    RGB <= cur_reg.r & cur_reg.g & cur_reg.b;
     
-    HSYNC   <= hsync_q;
-    VSYNC   <= vsync_q;
+    POSITIVE_HSYNC  <= pos_hsync_q;
+    POSITIVE_VSYNC  <= pos_vsync_q;
+    HSYNC           <= hsync_q;
+    VSYNC           <= vsync_q;
     
     RGB_ENABLE  <= rgb_enable_q;
     
     vp  <= video_profiles(nat(PROFILE));
+    
+    rst_stm <= RST or not pix_clk_locked;
     
     VIDEO_TIMING_GEN_inst : entity work.VIDEO_TIMING_GEN
         generic map (
@@ -136,8 +145,10 @@ begin
             y_grad  := (others => '0');
         elsif SIMPLE_PATTERN then
             -- repeated gradient squares instead of one gradient across the frame
-            x_grad  := resize(uns(x(7 downto 0)), MAX_BITS+1);
-            y_grad  := resize(uns(y(7 downto 0)), MAX_BITS+1);
+            x_grad  := (others => '0');
+            y_grad  := (others => '0');
+            x_grad(MAX_BITS downto MAX_BITS-7)  := uns(x(7 downto 0));
+            y_grad(MAX_BITS downto MAX_BITS-7)  := uns(y(7 downto 0));
         else
             if ANIMATED then
                 -- gains the maximum brightness from 0 to 1 from frame 0 to FRAME_STEP of that pattern
@@ -190,9 +201,9 @@ begin
         end case;
     end process;
     
-    frame_count_proc : process (RST, pix_clk)
+    frame_count_proc : process (rst_stm, pix_clk)
     begin
-        if RST='1' then
+        if rst_stm='1' then
             frame_count <= 0;
         elsif rising_edge(pix_clk) then
             if pos_vsync_q='0' and pos_vsync='1' then
@@ -206,15 +217,16 @@ begin
                 frame_count <= 0;
             end if;
             pos_vsync_q     <= pos_vsync;
+            pos_hsync_q     <= pos_hsync;
             hsync_q         <= hsync_out;
             vsync_q         <= vsync_out;
             rgb_enable_q    <= rgb_enable_out;
         end if;
     end process;
     
-    stm_sync_proc : process (RST, pix_clk)
+    stm_sync_proc : process (rst_stm, pix_clk)
     begin
-        if RST='1' then
+        if rst_stm='1' then
             cur_reg <= reg_type_def;
         elsif rising_edge(pix_clk) then
             cur_reg <= next_reg;

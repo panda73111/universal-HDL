@@ -102,7 +102,7 @@ package body help_funcs is
     
     function "+"(v : std_ulogic_vector; n : natural) return std_ulogic_vector is
     begin
-        return std_ulogic_vector(uns(v) + to_unsigned(n, v'length));
+        return std_ulogic_vector(uns(v) + uns(n, v'length));
     end function;
     
     function "+"(v : std_ulogic_vector; u : unsigned) return std_ulogic_vector is
@@ -148,7 +148,7 @@ package body help_funcs is
     
     function "-"(v : std_ulogic_vector; n : natural) return std_ulogic_vector is
     begin
-        return std_ulogic_vector(uns(v) - to_unsigned(n, v'length));
+        return std_ulogic_vector(uns(v) - uns(n, v'length));
     end function;
     
     function "-"(v : std_ulogic_vector; u : unsigned) return std_ulogic_vector is

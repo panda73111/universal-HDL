@@ -6,6 +6,14 @@ package video_profiles is
     
     constant VIDEO_PROFILE_COUNT    : natural := 7;
     
+    constant VIDEO_PROFILE_320_240p_60      : natural := 0;
+    constant VIDEO_PROFILE_640_480p_60      : natural := 1;
+    constant VIDEO_PROFILE_1024_768p_75     : natural := 2;
+    constant VIDEO_PROFILE_1280_720p_60     : natural := 3;
+    constant VIDEO_PROFILE_1920_1080p_30    : natural := 4;
+    constant VIDEO_PROFILE_1920_1080i_60    : natural := 5;
+    constant VIDEO_PROFILE_1920_1080p_60    : natural := 6;
+    
     type video_profile_type is record
         width           : natural;
         height          : natural;
