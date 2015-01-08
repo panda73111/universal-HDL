@@ -8,7 +8,7 @@ entity DUAL_PORT_RAM is
         -- default: 1 Kilobyte in bytes
         WIDTH       : natural := 8;
         DEPTH       : natural := 1024;
-        WRITE_FIRST  : boolean := true
+        WRITE_FIRST : boolean := true
     );
     port (
         CLK : in std_ulogic;
