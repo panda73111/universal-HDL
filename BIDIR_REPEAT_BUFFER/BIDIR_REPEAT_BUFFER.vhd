@@ -52,8 +52,10 @@ architecture Behavioral of BIDIR_REPEAT_BUFFER is
         DEBOUNCING
     );
     
+    constant CYCLE_BITS : natural := log2(DEBOUNCE_CYCLES)+1;
+    
     signal state        : state_type := FLOATING;
-    signal cycle_cnt    : natural range 0 to DEBOUNCE_CYCLES-1 := 0;
+    signal cycle_cnt    : unsigned(CYCLE_BITS-1 downto 0) := (others => '0');
     
 begin
     
@@ -63,8 +65,9 @@ begin
             case state is
                 
                 when FLOATING =>
-                    P0_OUT  <= FLOATING_LEVEL;
-                    P1_OUT  <= FLOATING_LEVEL;
+                    P0_OUT      <= FLOATING_LEVEL;
+                    P1_OUT      <= FLOATING_LEVEL;
+                    cycle_cnt   <= uns(DEBOUNCE_CYCLES-2, CYCLE_BITS);
                     if P0_IN=DRIVING_LEVEL then
                         state   <= P0_DRIVING;
                     end if;
@@ -91,10 +94,9 @@ begin
                 when DEBOUNCING =>
                     P0_OUT      <= FLOATING_LEVEL;
                     P1_OUT      <= FLOATING_LEVEL;
-                    cycle_cnt   <= cycle_cnt+1;
-                    if cycle_cnt=DEBOUNCE_CYCLES-1 then
-                        cycle_cnt   <= 0;
-                        state       <= FLOATING;
+                    cycle_cnt   <= cycle_cnt-1;
+                    if cycle_cnt(cycle_cnt'high)='1' then
+                        state   <= FLOATING;
                     end if;
                 
             end case;
