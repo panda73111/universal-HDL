@@ -27,23 +27,23 @@ use work.help_funcs.all;
 entity BIDIR_REPEAT_BUFFER is
     generic (
         PULL            : string := "UP";
-        FLOAT           : boolean := false;
         DEBOUNCE_CYCLES : natural := 5
     );
     port (
         CLK : in std_ulogic;
         
         P0_IN   : in std_ulogic;
-        P0_OUT  : out std_ulogic := '0';
+        P0_OUT  : out std_ulogic := 'Z';
         P1_IN   : in std_ulogic;
-        P1_OUT  : out std_ulogic := '0'
+        P1_OUT  : out std_ulogic := 'Z'
     );
 end BIDIR_REPEAT_BUFFER;
 
 architecture Behavioral of BIDIR_REPEAT_BUFFER is
     
-    constant FLOATING_LEVEL : std_ulogic := sel(FLOAT, 'Z', sel(PULL="UP", '1', '0'));
-    constant DRIVING_LEVEL  : std_ulogic := sel(PULL="UP", '0', '1');
+    constant FLOATING_LEVEL : std_ulogic := sel(PULL="UP", '1', '0');
+    constant DRIVING_LEVEL  : std_ulogic := not FLOATING_LEVEL;
+    constant CYCLE_BITS     : natural := log2(DEBOUNCE_CYCLES)+1;
     
     type state_type is (
         FLOATING,
@@ -52,54 +52,79 @@ architecture Behavioral of BIDIR_REPEAT_BUFFER is
         DEBOUNCING
     );
     
-    constant CYCLE_BITS : natural := log2(DEBOUNCE_CYCLES)+1;
+    type reg_type is record
+        state       : state_type;
+        p0_out      : std_ulogic;
+        p1_out      : std_ulogic;
+        cycle_cnt   : unsigned(CYCLE_BITS-1 downto 0);
+    end record;
     
-    signal state        : state_type := FLOATING;
-    signal cycle_cnt    : unsigned(CYCLE_BITS-1 downto 0) := (others => '0');
+    constant reg_type_def   : reg_type := (
+        state       => FLOATING,
+        p0_out      => 'Z',
+        p1_out      => 'Z',
+        cycle_cnt   => (others => '0')
+    );
+    
+    signal cur_reg, next_reg    : reg_type := reg_type_def;
     
 begin
     
-    process(CLK)
+    P0_OUT  <= DRIVING_LEVEL when cur_reg.p0_out=DRIVING_LEVEL else 'Z';
+    P1_OUT  <= DRIVING_LEVEL when cur_reg.p1_out=DRIVING_LEVEL else 'Z';
+    
+    stm_proc : process(cur_reg, P0_IN, P1_IN)
+        alias cr is cur_reg;
+        variable r  : reg_type := reg_type_def;
+    begin
+        r   := cr;
+        
+        case cr.state is
+            
+            when FLOATING =>
+                r.p0_out    := FLOATING_LEVEL;
+                r.p1_out    := FLOATING_LEVEL;
+                r.cycle_cnt := uns(DEBOUNCE_CYCLES-2, CYCLE_BITS);
+                if P0_IN=DRIVING_LEVEL then
+                    r.state := P0_DRIVING;
+                end if;
+                if P1_IN=DRIVING_LEVEL then
+                    r.state := P1_DRIVING;
+                end if;
+            
+            when P0_DRIVING =>
+                r.p0_out    := FLOATING_LEVEL;
+                r.p1_out    := DRIVING_LEVEL;
+                if P0_IN=FLOATING_LEVEL then
+                    r.p1_out    := FLOATING_LEVEL;
+                    r.state     := DEBOUNCING;
+                end if;
+            
+            when P1_DRIVING =>
+                r.p0_out    := DRIVING_LEVEL;
+                r.p1_out    := FLOATING_LEVEL;
+                if P0_IN=FLOATING_LEVEL then
+                    r.p0_out    := FLOATING_LEVEL;
+                    r.state     := DEBOUNCING;
+                end if;
+            
+            when DEBOUNCING =>
+                r.p0_out    := FLOATING_LEVEL;
+                r.p1_out    := FLOATING_LEVEL;
+                r.cycle_cnt := cr.cycle_cnt-1;
+                if cr.cycle_cnt(reg_type.cycle_cnt'high)='1' then
+                    r.state := FLOATING;
+                end if;
+            
+        end case;
+        
+        next_reg    <= r;
+    end process;
+    
+    stm_sync_proc : process(CLK)
     begin
         if rising_edge(CLK) then
-            case state is
-                
-                when FLOATING =>
-                    P0_OUT      <= FLOATING_LEVEL;
-                    P1_OUT      <= FLOATING_LEVEL;
-                    cycle_cnt   <= uns(DEBOUNCE_CYCLES-2, CYCLE_BITS);
-                    if P0_IN=DRIVING_LEVEL then
-                        state   <= P0_DRIVING;
-                    end if;
-                    if P1_IN=DRIVING_LEVEL then
-                        state   <= P1_DRIVING;
-                    end if;
-                
-                when P0_DRIVING =>
-                    P0_OUT  <= FLOATING_LEVEL;
-                    P1_OUT  <= DRIVING_LEVEL;
-                    if P0_IN=FLOATING_LEVEL then
-                        P1_out  <= FLOATING_LEVEL;
-                        state   <= DEBOUNCING;
-                    end if;
-                
-                when P1_DRIVING =>
-                    P0_OUT  <= DRIVING_LEVEL;
-                    P1_OUT  <= FLOATING_LEVEL;
-                    if P0_IN=FLOATING_LEVEL then
-                        P0_OUT  <= FLOATING_LEVEL;
-                        state   <= DEBOUNCING;
-                    end if;
-                
-                when DEBOUNCING =>
-                    P0_OUT      <= FLOATING_LEVEL;
-                    P1_OUT      <= FLOATING_LEVEL;
-                    cycle_cnt   <= cycle_cnt-1;
-                    if cycle_cnt(cycle_cnt'high)='1' then
-                        state   <= FLOATING;
-                    end if;
-                
-            end case;
+            cur_reg <= next_reg;
         end if;
     end process;
     

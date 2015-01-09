@@ -41,7 +41,6 @@ BEGIN
     BIDIR_REPEAT_BUFFER_inst : entity work.BIDIR_REPEAT_BUFFER
         generic map (
             PULL            => "UP",
-            FLOAT           => true,
             DEBOUNCE_CYCLES => 20
         )
         port map (
@@ -58,26 +57,26 @@ BEGIN
     -- Stimulus process
     stim_proc: process
     begin
-        P0_IN   <= 'Z';
-        P1_IN   <= 'Z';
+        P0_IN   <= '1';
+        P1_IN   <= '1';
         wait for 100 ns;
         P0_IN   <= '0';
         P1_IN   <= '0';
         wait for 100 ns;
-        P0_IN   <= 'Z';
+        P0_IN   <= '1';
         P1_IN   <= '0';
         wait for 100 ns;
         P0_IN   <= '0';
         P1_IN   <= '0';
         wait for 100 ns;
         P0_IN   <= '0';
-        P1_IN   <= 'Z';
+        P1_IN   <= '1';
         wait for 100 ns;
         P0_IN   <= '0';
         P1_IN   <= '0';
         wait for 100 ns;
-        P0_IN   <= 'Z';
-        P1_IN   <= 'Z';
+        P0_IN   <= '1';
+        P1_IN   <= '1';
         wait for 100 ns;
         
         report "NONE. All tests finished successfully."
