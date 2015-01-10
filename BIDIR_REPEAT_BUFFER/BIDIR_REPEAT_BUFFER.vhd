@@ -96,15 +96,13 @@ begin
                 r.p0_out    := FLOATING_LEVEL;
                 r.p1_out    := DRIVING_LEVEL;
                 if P0_IN=FLOATING_LEVEL then
-                    r.p1_out    := FLOATING_LEVEL;
                     r.state     := DEBOUNCING;
                 end if;
             
             when P1_DRIVING =>
                 r.p0_out    := DRIVING_LEVEL;
                 r.p1_out    := FLOATING_LEVEL;
-                if P0_IN=FLOATING_LEVEL then
-                    r.p0_out    := FLOATING_LEVEL;
+                if P1_IN=FLOATING_LEVEL then
                     r.state     := DEBOUNCING;
                 end if;
             

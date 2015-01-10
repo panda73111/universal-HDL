@@ -79,6 +79,7 @@ BEGIN
         P1_IN   <= '1';
         wait for 100 ns;
         
+        wait for 100 ns;
         report "NONE. All tests finished successfully."
             severity FAILURE;
     end process;
