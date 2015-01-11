@@ -36,10 +36,10 @@ begin
     begin
         if rising_edge(CLK) then
             
-            DOUT    <= ram(int(RD_ADDR));
+            DOUT    <= ram(nat(RD_ADDR));
             
             if WR_EN='1' then
-                ram(int(WR_ADDR))   <= DIN;
+                ram(nat(WR_ADDR))   <= DIN;
             end if;
             
             if WRITE_FIRST and WR_EN='1' and RD_ADDR=WR_ADDR then
