@@ -48,10 +48,11 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     subtype cmd_type is std_ulogic_vector(7 downto 0);
     
-    constant CMDS_WRITE_ENABLE          : cmd_type := x"06";
-    constant CMDS_SECTOR_ERASE          : cmd_type := x"D8";
-    constant CMDS_READ_DATA_BYTES       : cmd_type := x"0B"; -- read at higher speed
-    constant CMDS_READ_STATUS_REGISTER  : cmd_type := x"05";
+    constant CMD_WRITE_ENABLE           : cmd_type := x"06";
+    constant CMD_SECTOR_ERASE           : cmd_type := x"D8";
+    constant CMD_READ_DATA_BYTES        : cmd_type := x"03";
+    constant CMD_PAGE_PROGRAM           : cmd_type := x"02";
+    constant CMD_READ_STATUS_REGISTER   : cmd_type := x"05";
     
     type state_type is (
         WAIT_FOR_INPUT,
@@ -59,7 +60,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         -- Read
         SEND_READ_COMMAND,
         SEND_READ_ADDR,
-        SEND_DUMMY_BYTE,
+        WAIT_FOR_DATA,
         READ_DATA,
         
         -- Erase
@@ -71,6 +72,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         WAIT_FOR_SECTOR_ERASE,
         ERASE_SEND_READ_STATUS_REGISTER_COMMAND,
         ERASE_READ_STATUS_REGISTER,
+        ERASE_CHECK_WIP_BIT,
         
         -- Program
         PROGRAM_SEND_WRITE_ENABLE_COMMAND,
@@ -81,7 +83,8 @@ architecture rtl of SPI_FLASH_CONTROL is
         END_PROGRAM_COMMAND,
         WAIT_FOR_PROGRAM,
         PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND,
-        PROGRAM_READ_STATUS_REGISTER
+        PROGRAM_READ_STATUS_REGISTER,
+        PROGRAM_CHECK_WIP_BIT
     );
     
     type reg_type is record
@@ -199,31 +202,29 @@ begin
             
             when SEND_READ_COMMAND =>
                 r.sn                := '0';
-                r.mosi              := CMDS_READ_DATA_BYTES(int(cr.data_bit_index));
+                r.mosi              := CMD_READ_DATA_BYTES(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.state := SEND_READ_ADDR;
                 end if;
             
             when SEND_READ_ADDR =>
-                r.mosi              := ADDR(int(cr.addr_bit_index));
+                r.mosi              := ADDR(nat(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=0 then
-                    r.state := SEND_DUMMY_BYTE;
+                    r.state := WAIT_FOR_DATA;
                 end if;
             
-            when SEND_DUMMY_BYTE =>
-                r.data_bit_index    := cr.data_bit_index-1;
-                if cr.data_bit_index=0 then
-                    r.state := READ_DATA;
-                end if;
+            when WAIT_FOR_DATA =>
+                r.state := READ_DATA;
             
             when READ_DATA =>
-                r.data(int(cr.data_bit_index))  := MISO;
+                r.data(nat(cr.data_bit_index))  := MISO;
                 r.data_bit_index                := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.valid := '1';
-                    if RD_EN='0' then
+                    if rd_en_sync='0' then
+                        r.sn    := '1';
                         r.state := WAIT_FOR_INPUT;
                     end if;
                 end if;
@@ -232,7 +233,7 @@ begin
             
             when ERASE_SEND_WRITE_ENABLE_COMMAND =>
                 r.sn                := '0';
-                r.mosi              := CMDS_WRITE_ENABLE(int(cr.data_bit_index));
+                r.mosi              := CMD_WRITE_ENABLE(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.state := ERASE_END_WRITE_ENABLE_COMMAND;
@@ -244,22 +245,22 @@ begin
             
             when SEND_SECTOR_ERASE_COMMAND =>
                 r.sn                := '0';
-                r.mosi              := CMDS_SECTOR_ERASE(int(cr.data_bit_index));
+                r.mosi              := CMD_SECTOR_ERASE(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.state := SEND_ERASE_ADDRESS;
                 end if;
             
             when SEND_ERASE_ADDRESS =>
-                r.mosi              := ADDR(int(cr.addr_bit_index));
+                r.mosi              := ADDR(nat(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=0 then
                     r.state := END_SECTOR_ERASE_COMMAND;
                 end if;
             
             when END_SECTOR_ERASE_COMMAND =>
-                r.sn                := '1';
-                r.state             := WAIT_FOR_SECTOR_ERASE;
+                r.sn    := '1';
+                r.state := WAIT_FOR_SECTOR_ERASE;
             
             when WAIT_FOR_SECTOR_ERASE =>
                 r.tick_count    := cr.tick_count+1;
@@ -270,7 +271,7 @@ begin
             when ERASE_SEND_READ_STATUS_REGISTER_COMMAND =>
                 r.tick_count        := 0;
                 r.sn                := '0';
-                r.mosi              := CMDS_READ_STATUS_REGISTER(int(cr.data_bit_index));
+                r.mosi              := CMD_READ_STATUS_REGISTER(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.state := ERASE_READ_STATUS_REGISTER;
@@ -279,18 +280,22 @@ begin
             when ERASE_READ_STATUS_REGISTER =>
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
-                    -- WIP (write in progress) bit
-                    r.state := WAIT_FOR_SECTOR_ERASE;
-                    if MISO='0' then
-                        r.state := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
-                    end if;
+                    r.sn    := '1';
+                    r.state := ERASE_CHECK_WIP_BIT;
+                end if;
+            
+            when ERASE_CHECK_WIP_BIT =>
+                -- WIP = 'write in progress' bit
+                r.state := WAIT_FOR_SECTOR_ERASE;
+                if MISO='0' then
+                    r.state := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
                 end if;
             
             -- Program
             
             when PROGRAM_SEND_WRITE_ENABLE_COMMAND =>
                 r.sn                := '0';
-                r.mosi              := CMDS_WRITE_ENABLE(int(cr.data_bit_index));
+                r.mosi              := CMD_WRITE_ENABLE(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.state := PROGRAM_END_WRITE_ENABLE_COMMAND;
@@ -303,14 +308,14 @@ begin
             
             when SEND_PROGRAM_COMMAND =>
                 r.sn                := '0';
-                r.mosi              := CMDS_READ_DATA_BYTES(int(cr.data_bit_index));
+                r.mosi              := CMD_PAGE_PROGRAM(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.state := SEND_PROGRAM_ADDR;
                 end if;
             
             when SEND_PROGRAM_ADDR =>
-                r.mosi              := ADDR(int(cr.addr_bit_index));
+                r.mosi              := ADDR(nat(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=0 then
                     r.fifo_rd_en    := '1';
@@ -318,7 +323,7 @@ begin
                 end if;
             
             when SEND_DATA =>
-                r.mosi              := fifo_dout(int(cr.data_bit_index));
+                r.mosi              := fifo_dout(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 r.addr_bit_index    := uns(23, 6);
                 if cr.data_bit_index=0 then
@@ -341,7 +346,7 @@ begin
             when PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND =>
                 r.tick_count        := 0;
                 r.sn                := '0';
-                r.mosi              := CMDS_READ_STATUS_REGISTER(int(cr.data_bit_index));
+                r.mosi              := CMD_READ_STATUS_REGISTER(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.state := PROGRAM_READ_STATUS_REGISTER;
@@ -350,11 +355,15 @@ begin
             when PROGRAM_READ_STATUS_REGISTER =>
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
-                    -- WIP (write in progress) bit
-                    r.state := WAIT_FOR_PROGRAM;
-                    if MISO='0' then
-                        r.state := WAIT_FOR_INPUT;
-                    end if;
+                    r.sn    := '1';
+                    r.state := PROGRAM_CHECK_WIP_BIT;
+                end if;
+            
+            when PROGRAM_CHECK_WIP_BIT =>
+                -- WIP (write in progress) bit
+                r.state := WAIT_FOR_PROGRAM;
+                if MISO='0' then
+                    r.state := WAIT_FOR_INPUT;
                 end if;
             
         end case;
@@ -362,10 +371,11 @@ begin
         if RST='1' then
             r   := reg_type_def;
         end if;
+        
         next_reg    <= r;
     end process;
     
-    sync_stm_proc : process(RST, clk_out)
+    stm_sync_proc : process(RST, clk_out)
     begin
         if RST='1' then
             cur_reg <= reg_type_def;
