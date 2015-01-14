@@ -22,7 +22,7 @@ entity ASYNC_FIFO_2CLK_tb is
     );  
 end ASYNC_FIFO_2CLK_tb;
 
-architecture behavioral of ASYNC_FIFO_2CLK_tb is
+architecture behavior of ASYNC_FIFO_2CLK_tb is
     
     -- inputs
     signal RD_CLK   : std_ulogic := '0';
@@ -94,6 +94,10 @@ begin
         
         wait until read_stage=2 and write_stage=2;
         
+        -- stage 2: write too much data to the FIFO
+        
+        wait until read_stage=3 and write_stage=3;
+        
         wait for 1 us;
         report "NONE. All tests completed."
             severity FAILURE;
@@ -101,42 +105,60 @@ begin
     
     read_proc : process
         variable dout_counter   : unsigned(WIDTH-1 downto 0);
+        
+        procedure read_bytes(
+            variable data           : inout unsigned(7 downto 0);
+            constant count          : in positive;
+            constant expect_empty   : in boolean
+        ) is
+        begin
+            wait until falling_edge(RD_CLK);
+            RD_EN   <= '1';
+            wait until rising_edge(RD_CLK);
+            for i in 0 to count-1 loop
+                wait until rising_edge(RD_CLK);
+                if expect_empty then
+                    assert EMPTY='1'
+                        report "FIFO unexpectedly not empty!"
+                        severity FAILURE;
+                    assert VALID='0'
+                        report "Got unexpected data!"
+                        severity FAILURE;
+                else
+                    assert EMPTY='0'
+                        report "FIFO unexpectedly empty!"
+                        severity FAILURE;
+                    assert VALID='1'
+                        report "Didn't get any data!"
+                        severity FAILURE;                
+                    assert DOUT=stdulv(dout_counter)
+                        report "Got wrong data!"
+                        severity FAILURE;
+                end if;
+                
+                dout_counter    := dout_counter+1;
+            end loop;
+            RD_EN   <= '0';
+        end procedure;
     begin
         RD_EN           <= '0';
         dout_counter    := (others => '0');
         wait until start_read;
-        wait until falling_edge(RD_CLK);
         
         -- stage 0
-        wait on write_stage;
+        wait until write_stage=1;
         
         read_stage  <= read_stage+1;
         
         -- stage 1
-        RD_EN   <= '1';
-        for i in 0 to DEPTH-1 loop
-            assert EMPTY='0'
-                report "FIFO unexpectedly empty!"
-                severity FAILURE;
-            
-            wait until falling_edge(RD_CLK);
-            
-            assert VALID='1'
-                report "Didn't get any data!"
-                severity FAILURE;
-            
-            assert DOUT=stdulv(dout_counter)
-                report "Got wrong data!"
-                severity FAILURE;
-            
-            dout_counter    := dout_counter+1;
-        end loop;
-        RD_EN   <= '0';
         
-        wait until rising_edge(RD_CLK);
-        assert EMPTY='1'
-            report "FIFO unexpectedly not empty!"
-            severity FAILURE;
+        read_bytes(dout_counter, DEPTH-1, false);
+        read_bytes(dout_counter, 1, true);
+        
+        read_stage  <= read_stage+1;
+        
+        -- stage 2
+        wait until write_stage=3;
         
         read_stage  <= read_stage+1;
         
@@ -145,36 +167,62 @@ begin
     
     write_proc : process
         variable din_counter    : unsigned(WIDTH-1 downto 0);
+        
+        procedure write_bytes(
+            variable data           : inout unsigned(7 downto 0);
+            constant count          : in positive;
+            constant expect_full    : in boolean
+        ) is
+        begin
+            wait until falling_edge(WR_CLK);
+            WR_EN   <= '1';
+            for i in 0 to count-1 loop
+                DIN         <= stdulv(din_counter);
+                din_counter := din_counter+1;
+                
+                wait until rising_edge(WR_CLK);
+                if expect_full then
+                    assert FULL='1'
+                        report "FIFO unexpectedly not full!"
+                        severity FAILURE;
+                else
+                    assert FULL='0'
+                        report "FIFO unexpectedly full!"
+                        severity FAILURE;
+                end if;
+                
+                wait until falling_edge(WR_CLK);
+            end loop;
+            WR_EN   <= '0';
+        end procedure;
     begin
         WR_EN       <= '0';
         din_counter := uns(0, din_counter'length);
         wait until start_write;
-        wait until falling_edge(WR_CLK);
         
         -- stage 0
-        WR_EN   <= '1';
-        for i in 0 to DEPTH-1 loop
-            assert FULL='0'
-                report "FIFO unexpectedly full!"
-                severity FAILURE;
-            
-            DIN         <= stdulv(din_counter);
-            din_counter := din_counter+1;
-            wait until falling_edge(WR_CLK);
-        end loop;
-        WR_EN   <= '0';
-        
+        write_bytes(din_counter, DEPTH, false);
         wait until rising_edge(WR_CLK);
         assert FULL='1'
             report "FIFO unexpectedly not full!"
             severity FAILURE;
         
+        write_stage <= write_stage+1;
+        
+        -- stage 1
+        wait until read_stage=2;
         
         write_stage <= write_stage+1;
         
-        wait on read_stage;
+        -- stage 2
         
-        -- stage 1
+        write_bytes(din_counter, DEPTH, false);
+        wait until rising_edge(WR_CLK);
+        assert FULL='1'
+            report "FIFO unexpectedly not full!"
+            severity FAILURE;
+        write_bytes(din_counter, DEPTH, true);
+        
         write_stage <= write_stage+1;
         
         wait;

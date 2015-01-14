@@ -51,7 +51,7 @@ architecture rtl of ASYNC_FIFO_2CLK is
     signal rd_p : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0');
     signal wr_p : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0');
     
-    signal is_full, is_empty    : boolean := false;
+    signal is_full, is_empty    : boolean := true;
     signal collision            : boolean := false;
     
     signal rd_p_counter_en  : std_ulogic := '0';
@@ -159,7 +159,7 @@ begin
         end if;
     end process;
     
-    empty_detect_proc : process(preset_full, RD_CLK)
+    empty_detect_proc : process(preset_empty, RD_CLK)
     begin
         if preset_empty='1' then
             is_empty    <= true;
