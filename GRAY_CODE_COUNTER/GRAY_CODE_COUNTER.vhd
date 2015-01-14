@@ -33,17 +33,17 @@ architecture rtl of GRAY_CODE_COUNTER is
     signal bin_counter  : unsigned(WIDTH-1 downto 0) := (others => '0');
 begin
     
+    COUNTER <=  bin_counter(WIDTH-1) &
+                stdulv(bin_counter(WIDTH-1 downto 1) xor bin_counter(WIDTH-2 downto 0));
+    
     count_proc : process(RST, CLK)
     begin
         if RST='1' then
             bin_counter <= (others => '0');
-            COUNTER     <= (others => '0');
         elsif rising_edge(CLK) then
             if EN='1' then
                 bin_counter <= bin_counter+1;
             end if;
-            COUNTER <=  bin_counter(WIDTH-1) &
-                stdulv(bin_counter(WIDTH-1 downto 1) xor bin_counter(WIDTH-2 downto 0));
         end if;
     end process;
     
