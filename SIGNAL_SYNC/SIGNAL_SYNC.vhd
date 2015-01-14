@@ -17,18 +17,21 @@ library UNISIM;
 use UNISIM.VComponents.all;
 
 entity SIGNAL_SYNC is
+    generic (
+        DEFAULT_VALUE   : std_ulogic := '0'
+    );
     port (
         CLK_IN  : in std_ulogic;
         CLK_OUT : in std_ulogic;
         
         DIN : in std_ulogic;
         
-        DOUT    : out std_ulogic := '0'
+        DOUT    : out std_ulogic := DEFAULT_VALUE
     );
 end SIGNAL_SYNC;
 
 architecture rtl of SIGNAL_SYNC is
-    signal q    : std_ulogic := '0';
+    signal q    : std_ulogic := DEFAULT_VALUE;
 begin
     
 --    clk_out_fd0 : FD port map (C => CLK_OUT, D => q,    Q => DOUT);
