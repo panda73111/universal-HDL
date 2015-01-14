@@ -2,12 +2,10 @@
 -- Engineer: Sebastian Huether
 --
 -- Create Date:   23:36:00 09/11/2014
--- Module Name:   UART_RECEIVER_tb.vhd
--- Project Name:  UART_RECEIVER
+-- Module Name:   SPI_FLASH_CONTROL_tb.vhd
+-- Project Name:  SPI_FLASH_CONTROL
 -- Tool versions: Xilinx ISE 14.7
 -- Description:   
--- 
--- VHDL Test Bench Created by ISE for module: UART_RECEIVER
 -- 
 -- Additional Comments:
 --  
