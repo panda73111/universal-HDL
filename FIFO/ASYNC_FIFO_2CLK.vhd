@@ -8,7 +8,7 @@
 -- Description: 
 --
 -- Additional Comments: 
---
+--  reference: http://www.asic-world.com/examples/vhdl/asyn_fifo.html
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -18,9 +18,8 @@ use work.help_funcs.all;
 entity ASYNC_FIFO_2CLK is
     generic (
         -- default: 1 Kilobyte in bytes
-        WIDTH           : natural := 8;
-        DEPTH           : natural := 1024;
-        COUNT_ON_READ   : boolean := true
+        WIDTH   : positive := 8;
+        DEPTH   : positive := 1024
     );
     port (
         RD_CLK  : in std_ulogic;
@@ -31,56 +30,88 @@ entity ASYNC_FIFO_2CLK is
         RD_EN   : in std_ulogic;
         WR_EN   : in std_ulogic;
         
-        DOUT            : out std_ulogic_vector(WIDTH-1 downto 0) := (others => '0');
-        FULL            : out std_ulogic := '0';
-        EMPTY           : out std_ulogic := '0';
-        ALMOST_FULL     : out std_ulogic := '0'; -- space for one packet left
-        ALMOST_EMPTY    : out std_ulogic := '0'; -- one packet left
-        WR_ACK          : out std_ulogic := '0'; -- write was successful
-        RD_ACK          : out std_ulogic := '0'; -- read was successful
-        COUNT           : out std_ulogic_vector (log2(DEPTH)-1 downto 0) := (others => '0')
+        DOUT    : out std_ulogic_vector(WIDTH-1 downto 0) := (others => '0');
+        FULL    : out std_ulogic := '0';
+        EMPTY   : out std_ulogic := '0';
+        WR_ACK  : out std_ulogic := '0'; -- write was successful
+        VALID   : out std_ulogic := '0'  -- read was successful
     ); 
 end ASYNC_FIFO_2CLK;
 
 architecture rtl of ASYNC_FIFO_2CLK is
-    type ram_type is array(0 to DEPTH-1) of std_ulogic_vector(WIDTH-1 downto 0);
-    signal ram          : ram_type;
-    signal rd_p         : natural range 0 to DEPTH-1 := 0;
-    signal wr_p         : natural range 0 to DEPTH-1 := 0;
-    signal cnt_u        : natural range 0 to DEPTH-1 := 0;
-    signal count_clk    : std_ulogic := '0';
-
-    -- pragma translate_off
-    signal used_cnt     : natural := 0; -- for debugging, keeps the highest number of buffered packets
-    signal missing_cnt  : natural := 0; -- for debugging, counts write attempts when already full
-    -- pragma translate_on
+    
+    constant ADDR_BITS  : positive := log2(DEPTH);
+    
+    type ram_type is
+        array(0 to DEPTH-1) of
+        std_ulogic_vector(WIDTH-1 downto 0);
+    
+    signal ram  : ram_type;
+    
+    signal rd_p : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0');
+    signal wr_p : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0');
+    
+    signal is_full, is_empty    : boolean := false;
+    signal collision            : boolean := false;
+    
+    signal rd_p_counter_en  : std_ulogic := '0';
+    signal wr_p_counter_en  : std_ulogic := '0';
+    
+    signal status       : std_ulogic := '0';
+    signal set_status   : std_ulogic := '0';
+    signal rst_status   : std_ulogic := '0';
+    
+    signal preset_full  : std_ulogic := '0';
+    signal preset_empty : std_ulogic := '0';
+    
 begin
 
-    FULL            <= '1' when cnt_u=DEPTH                       else '0';
-    EMPTY           <= '1' when cnt_u=0                           else '0';
-    ALMOST_FULL     <= '1' when cnt_u=DEPTH-1 or cnt_u=DEPTH      else '0';
-    ALMOST_EMPTY    <= '1' when cnt_u=1       or cnt_u=0          else '0';
-    COUNT           <= stdulv(cnt_u, COUNT'length);
+    FULL    <= '1' when is_full     else '0';
+    EMPTY   <= '1' when is_empty    else '0';
     
-    count_on_read_gen : if COUNT_ON_READ generate
-        count_clk   <= RD_CLK;
-    end generate;
+    collision   <= rd_p=wr_p;
     
-    count_on_write_gen : if not COUNT_ON_READ generate
-        count_clk   <= WR_CLK;
-    end generate;
+    preset_full     <= '1' when status='1' and collision else '0';
+    preset_empty    <= '1' when status='0' and collision else '0';
+    
+    wr_p_counter_en <= '1' when WR_EN='1' and not is_full else '0';
+    rd_p_counter_en <= '1' when RD_EN='1' and not is_empty else '0';
+    
+    rd_GRAY_CODE_COUNTER_inst : entity work.GRAY_CODE_COUNTER
+        generic map (
+            WIDTH   => ADDR_BITS
+        )
+        port map (
+            CLK => RD_CLK,
+            RST => RST,
+            
+            EN  =>  rd_p_counter_en,
+            
+            COUNTER => rd_p
+        );
+    
+    wr_GRAY_CODE_COUNTER_inst : entity work.GRAY_CODE_COUNTER
+        generic map (
+            WIDTH   => ADDR_BITS
+        )
+        port map (
+            CLK => WR_CLK,
+            RST => RST,
+            
+            EN  =>  wr_p_counter_en,
+            
+            COUNTER => wr_p
+        );
     
     push_proc : process (RST, WR_CLK)
     begin
         if RST='1' then
-            wr_p    <= 0;
             WR_ACK  <= '0';
         elsif rising_edge(WR_CLK) then
             WR_ACK  <= '0';
-            if WR_EN='1' and cnt_u/=DEPTH then
-                ram(wr_p)   <= DIN;
-                WR_ACK      <= '1';
-                wr_p        <= (wr_p+1) mod DEPTH;
+            if WR_EN='1' and not is_full then
+                ram(nat(wr_p))  <= DIN;
+                WR_ACK          <= '1';
             end if;
         end if;
     end process;
@@ -88,43 +119,53 @@ begin
     pop_proc : process (RST, RD_CLK)
     begin
         if RST='1' then
-            rd_p    <= 0;
-            RD_ACK  <= '0';
+            VALID   <= '0';
         elsif rising_edge(RD_CLK) then
-            RD_ACK  <= '0';
-            if RD_EN='1' and cnt_u/=0 then
-                DOUT    <= ram(rd_p);
-                RD_ACK  <= '1';
-                rd_p    <= (rd_p+1) mod DEPTH;
+            VALID   <= '0';
+            DOUT    <= ram(nat(rd_p));
+            if RD_EN='1' and not is_empty then
+                VALID   <= '1';
             end if;
         end if;
     end process;
 
-    count_proc : process (RST, count_clk)
+    change_status_proc : process(rd_p, wr_p)
+        variable set_status_bit0, set_status_bit1   : std_ulogic;
+        variable rst_status_bit0, rst_status_bit1   : std_ulogic;
     begin
-        if RST='1' then
-            cnt_u       <= 0;
-            -- pragma translate_off
-            used_cnt    <= 0;
-            missing_cnt <= 0;
-            -- pragma translate_on
-        elsif rising_edge(count_clk) then
-            if WR_EN='1' and RD_EN='0' and cnt_u/=DEPTH then
-                cnt_u   <= cnt_u+1;
-            elsif RD_EN='1' and WR_EN='0' and cnt_u/=0 then
-                cnt_u   <= cnt_u-1;
-            end if;
-            
-            -- pragma translate_off
-            -- debugging
-            if WR_EN='1' and RD_EN='0' and cnt_u=DEPTH then
-                missing_cnt <= missing_cnt+1;
-            end if;
-            if cnt_u>used_cnt then
-                used_cnt    <= cnt_u;
-            end if;
-            -- pragma translate_on
+        set_status_bit0 := wr_p(ADDR_BITS-2) xnor rd_p(ADDR_BITS-1);
+        set_status_bit1 := wr_p(ADDR_BITS-1) xor rd_p(ADDR_BITS-2);
+        set_status      <= set_status_bit0 and set_status_bit1;
+        rst_status_bit0 := wr_p(ADDR_BITS-2) xor rd_p(ADDR_BITS-1);
+        rst_status_bit1 := wr_p(ADDR_BITS-1) xnor rd_p(ADDR_BITS-2);
+        rst_status      <= rst_status_bit0 and rst_status_bit1;
+    end process;
+    
+    status_proc : process(RST, set_status, rst_status)
+    begin
+        if RST='1' or rst_status='1' then
+            status  <= '0';
+        elsif set_status='1' then
+            status  <= '1';
         end if;
     end process;
-
+    
+    full_detect_proc : process(preset_full, WR_CLK)
+    begin
+        if preset_full='1' then
+            is_full <= true;
+        elsif rising_edge(WR_CLK) then
+            is_full <= false;
+        end if;
+    end process;
+    
+    empty_detect_proc : process(preset_full, RD_CLK)
+    begin
+        if preset_empty='1' then
+            is_empty    <= true;
+        elsif rising_edge(RD_CLK) then
+            is_empty    <= false;
+        end if;
+    end process;
+    
 end rtl;
