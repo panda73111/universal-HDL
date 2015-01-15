@@ -8,7 +8,7 @@
 -- Description: 
 --
 -- Additional Comments: 
---  reference: http://www.asic-world.com/examples/vhdl/asyn_fifo.html
+--  reference: ftp://ftp.sigmet.com/outgoing/custom/vaisala/ProgrammingDocs/Verilog/CummingsSNUG2002SJ_FIFO1.pdf
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -48,123 +48,92 @@ architecture rtl of ASYNC_FIFO_2CLK is
     
     signal ram  : ram_type;
     
-    signal rd_p : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0');
-    signal wr_p : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0');
+    signal rd_p, rd_p_wr_sync   : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
+    signal wr_p, wr_p_rd_sync   : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
     
-    signal is_full, is_empty    : boolean := true;
-    signal collision            : boolean := false;
+    signal rd_p_bin : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
+    signal wr_p_bin : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
     
-    signal rd_p_counter_en  : std_ulogic := '0';
-    signal wr_p_counter_en  : std_ulogic := '0';
+    signal rd_p_next, rd_p_bin_next : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
+    signal wr_p_next, wr_p_bin_next : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
     
-    signal status       : std_ulogic := '0';
-    signal set_status   : std_ulogic := '0';
-    signal rst_status   : std_ulogic := '0';
+    signal rd_addr  : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0');
+    signal wr_addr  : std_ulogic_vector(ADDR_BITS-1 downto 0) := (others => '0'); 
     
-    signal preset_full  : std_ulogic := '0';
-    signal preset_empty : std_ulogic := '0';
+    signal is_full, is_full_next    : std_ulogic := '0';
+    signal is_empty, is_empty_next  : std_ulogic := '1';
+    
+    signal rd_p_inc : std_ulogic := '0';
+    signal wr_p_inc : std_ulogic := '0';
     
 begin
-
-    FULL    <= '1' when is_full     else '0';
-    EMPTY   <= '1' when is_empty    else '0';
     
-    collision   <= rd_p=wr_p;
+    FULL    <= is_full;
+    EMPTY   <= is_empty;
     
-    preset_full     <= '1' when status='1' and collision else '0';
-    preset_empty    <= '1' when status='0' and collision else '0';
+    rd_p_inc    <= RD_EN and not is_empty;
+    wr_p_inc    <= WR_EN and not is_full;
     
-    wr_p_counter_en <= '1' when WR_EN='1' and not is_full else '0';
-    rd_p_counter_en <= '1' when RD_EN='1' and not is_empty else '0';
+    rd_addr <= rd_p_bin(ADDR_BITS-1 downto 0);
+    wr_addr <= wr_p_bin(ADDR_BITS-1 downto 0);
     
-    rd_GRAY_CODE_COUNTER_inst : entity work.GRAY_CODE_COUNTER
-        generic map (
-            WIDTH   => ADDR_BITS
-        )
-        port map (
-            CLK => RD_CLK,
-            RST => RST,
-            
-            EN  =>  rd_p_counter_en,
-            
-            COUNTER => rd_p
-        );
+    rd_p_bin_next   <= rd_p_bin + (rd_p_inc and not is_empty);
+    wr_p_bin_next   <= wr_p_bin + (wr_p_inc and not is_full);
     
-    wr_GRAY_CODE_COUNTER_inst : entity work.GRAY_CODE_COUNTER
-        generic map (
-            WIDTH   => ADDR_BITS
-        )
-        port map (
-            CLK => WR_CLK,
-            RST => RST,
-            
-            EN  =>  wr_p_counter_en,
-            
-            COUNTER => wr_p
-        );
+    -- gray code conversion
+    rd_p_next   <=  rd_p_bin_next(ADDR_BITS) &
+                    (rd_p_bin_next(ADDR_BITS downto 1) xor rd_p_bin_next(ADDR_BITS-1 downto 0));
+    wr_p_next   <=  wr_p_bin_next(ADDR_BITS) &
+                    (wr_p_bin_next(ADDR_BITS downto 1) xor wr_p_bin_next(ADDR_BITS-1 downto 0));
+    
+    is_full_next    <=  '1' when wr_p_next=
+                            (not rd_p_wr_sync(ADDR_BITS downto ADDR_BITS-1) &
+                            rd_p_wr_sync(ADDR_BITS-2 downto 0))
+                        else '0';
+    
+    is_empty_next   <= '1' when rd_p_next=wr_p_rd_sync else '0';
+    
+    rd_p_wr_sync_BUS_SYNC_inst : entity work.BUS_SYNC
+        generic map (ADDR_BITS+1) port map (WR_CLK, rd_p, rd_p_wr_sync);
+    
+    wr_p_rd_sync_BUS_SYNC_inst : entity work.BUS_SYNC
+        generic map (ADDR_BITS+1) port map (RD_CLK, wr_p, wr_p_rd_sync);
     
     push_proc : process (RST, WR_CLK)
     begin
         if RST='1' then
-            WR_ACK  <= '0';
+            WR_ACK      <= '0';
+            wr_p        <= (others => '0');
+            wr_p_bin    <= (others => '0');
+            is_full     <= '0';
         elsif rising_edge(WR_CLK) then
             WR_ACK  <= '0';
-            if WR_EN='1' and not is_full then
-                ram(nat(wr_p))  <= DIN;
-                WR_ACK          <= '1';
+            if WR_EN='1' and is_full='0' then
+                ram(nat(wr_addr))  <= DIN;
+                WR_ACK  <= '1';
             end if;
+            wr_p        <= wr_p_next;
+            wr_p_bin    <= wr_p_bin_next;
+            is_full     <= is_full_next;
         end if;
     end process;
 
     pop_proc : process (RST, RD_CLK)
     begin
         if RST='1' then
-            VALID   <= '0';
+            VALID       <= '0';
+            rd_p        <= (others => '0');
+            rd_p_bin    <= (others => '0');
+            is_empty    <= '1';
         elsif rising_edge(RD_CLK) then
             VALID   <= '0';
-            DOUT    <= ram(nat(rd_p));
-            if RD_EN='1' and not is_empty then
+            DOUT    <= ram(nat(rd_addr));
+            if RD_EN='1' and is_empty_next='0' then
                 VALID   <= '1';
             end if;
-        end if;
-    end process;
-
-    change_status_proc : process(rd_p, wr_p)
-        variable set_status_bit0, set_status_bit1   : std_ulogic;
-        variable rst_status_bit0, rst_status_bit1   : std_ulogic;
-    begin
-        set_status_bit0 := wr_p(ADDR_BITS-2) xnor rd_p(ADDR_BITS-1);
-        set_status_bit1 := wr_p(ADDR_BITS-1) xor rd_p(ADDR_BITS-2);
-        set_status      <= set_status_bit0 and set_status_bit1;
-        rst_status_bit0 := wr_p(ADDR_BITS-2) xor rd_p(ADDR_BITS-1);
-        rst_status_bit1 := wr_p(ADDR_BITS-1) xnor rd_p(ADDR_BITS-2);
-        rst_status      <= rst_status_bit0 and rst_status_bit1;
-    end process;
-    
-    status_proc : process(RST, set_status, rst_status)
-    begin
-        if RST='1' or rst_status='1' then
-            status  <= '0';
-        elsif set_status='1' then
-            status  <= '1';
-        end if;
-    end process;
-    
-    full_detect_proc : process(preset_full, WR_CLK)
-    begin
-        if preset_full='1' then
-            is_full <= true;
-        elsif rising_edge(WR_CLK) then
-            is_full <= false;
-        end if;
-    end process;
-    
-    empty_detect_proc : process(preset_empty, RD_CLK)
-    begin
-        if preset_empty='1' then
-            is_empty    <= true;
-        elsif rising_edge(RD_CLK) then
-            is_empty    <= false;
+            rd_p        <= rd_p_next;
+            rd_p_bin    <= rd_p_bin_next;
+            is_empty    <= is_empty_next;
         end if;
     end process;
     

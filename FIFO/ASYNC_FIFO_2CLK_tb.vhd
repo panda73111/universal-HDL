@@ -50,6 +50,11 @@ architecture behavior of ASYNC_FIFO_2CLK_tb is
     signal read_stage   : natural := 0;
     signal write_stage  : natural := 0;
     
+    signal read_counter     : natural := 0;
+    signal write_counter    : natural := 0;
+    signal din_counter      : unsigned(WIDTH-1 downto 0) := (others => '0');
+    signal dout_counter     : unsigned(WIDTH-1 downto 0) := (others => '0');
+    
 begin
     
     ASYNC_FIFO_2CLK_inst : entity work.ASYNC_FIFO_2CLK
@@ -73,8 +78,8 @@ begin
             DOUT    => DOUT
         );
     
-    RD_CLK  <= not RD_CLK after RD_CLK_PERIOD;
-    WR_CLK  <= not WR_CLK after WR_CLK_PERIOD;
+    RD_CLK  <= not RD_CLK after RD_CLK_PERIOD/2;
+    WR_CLK  <= not WR_CLK after WR_CLK_PERIOD/2;
     
     stim_proc : process
     begin
@@ -83,150 +88,164 @@ begin
         RST <= '0';
         wait for 100 ns;
         
+        -- stage 0: start test processes
+        
         start_read  <= true;
         start_write <= true;
         
-        -- stage 0: fill the FIFO
-        
         wait until read_stage=1 and write_stage=1;
         
-        -- stage 1: empty the FIFO
+        -- stage 1: fill the FIFO
         
         wait until read_stage=2 and write_stage=2;
         
-        -- stage 2: write too much data to the FIFO
+        -- stage 2: empty the FIFO
         
         wait until read_stage=3 and write_stage=3;
+        
+        -- stage 3: write too much data to the FIFO
+        
+--        wait until read_stage=4 and write_stage=4;
         
         wait for 1 us;
         report "NONE. All tests completed."
             severity FAILURE;
     end process;
     
-    read_proc : process
-        variable dout_counter   : unsigned(WIDTH-1 downto 0);
-        
-        procedure read_bytes(
-            variable data           : inout unsigned(7 downto 0);
-            constant count          : in positive;
+    read_proc : process(RD_CLK)
+        procedure test_flags(
+            constant expect_valid   : in boolean;
             constant expect_empty   : in boolean
         ) is
         begin
-            wait until falling_edge(RD_CLK);
-            RD_EN   <= '1';
-            wait until rising_edge(RD_CLK);
-            for i in 0 to count-1 loop
-                wait until rising_edge(RD_CLK);
-                if expect_empty then
-                    assert EMPTY='1'
-                        report "FIFO unexpectedly not empty!"
-                        severity FAILURE;
-                    assert VALID='0'
-                        report "Got unexpected data!"
-                        severity FAILURE;
-                else
-                    assert EMPTY='0'
-                        report "FIFO unexpectedly empty!"
-                        severity FAILURE;
-                    assert VALID='1'
-                        report "Didn't get any data!"
-                        severity FAILURE;                
-                    assert DOUT=stdulv(dout_counter)
-                        report "Got wrong data!"
-                        severity FAILURE;
-                end if;
-                
-                dout_counter    := dout_counter+1;
-            end loop;
-            RD_EN   <= '0';
+            if expect_empty then
+                assert EMPTY='1'
+                    report "FIFO unexpectedly not empty!"
+                    severity FAILURE;
+            else
+                assert EMPTY='0'
+                    report "FIFO unexpectedly empty!"
+                    severity FAILURE;
+            end if;
+            if expect_valid then
+                assert VALID='1'
+                    report "Didn't get any data!"
+                    severity FAILURE;
+                assert DOUT=stdulv(dout_counter)
+                    report "Got wrong data!"
+                    severity FAILURE;
+            else
+                assert VALID='0'
+                    report "Got unexpected data!"
+                    severity FAILURE;
+            end if;
         end procedure;
     begin
-        RD_EN           <= '0';
-        dout_counter    := (others => '0');
-        wait until start_read;
-        
-        -- stage 0
-        wait until write_stage=1;
-        
-        read_stage  <= read_stage+1;
-        
-        -- stage 1
-        
-        read_bytes(dout_counter, DEPTH-1, false);
-        read_bytes(dout_counter, 1, true);
-        
-        read_stage  <= read_stage+1;
-        
-        -- stage 2
-        wait until write_stage=3;
-        
-        read_stage  <= read_stage+1;
-        
-        wait;
+        if rising_edge(RD_CLK) then
+            read_counter    <= 0;
+            case read_stage is
+                
+                when 0 =>
+                    if start_read then
+                        read_stage  <= 1;
+                    end if;
+                
+                when 1 =>
+                    if write_stage=2 then
+                        read_stage  <= 2;
+                    end if;
+                
+                when 2 =>
+                    read_counter    <= read_counter+1;
+                    case read_counter is
+                        when 0 =>
+                            test_flags(false, false);
+                            RD_EN   <= '1';
+                        when 1 =>
+                            test_flags(false, false);
+                        when 32 =>
+                            test_flags(true, false);
+                            RD_EN   <= '0';
+                        when 33 =>
+                            test_flags(false, true);
+                            read_stage  <= 3;
+                        when others =>
+                            test_flags(true, false);
+                            RD_EN           <= '1';
+                            dout_counter    <= dout_counter+1;
+                    end case;
+                
+                when others =>
+                    null;
+                
+            end case;
+        end if;
     end process;
     
-    write_proc : process
-        variable din_counter    : unsigned(WIDTH-1 downto 0);
-        
-        procedure write_bytes(
-            variable data           : inout unsigned(7 downto 0);
-            constant count          : in positive;
+    write_proc : process(WR_CLK)
+        procedure test_flags(
+            constant expect_wr_ack  : in boolean;
             constant expect_full    : in boolean
         ) is
         begin
-            wait until falling_edge(WR_CLK);
-            WR_EN   <= '1';
-            for i in 0 to count-1 loop
-                DIN         <= stdulv(din_counter);
-                din_counter := din_counter+1;
-                
-                wait until rising_edge(WR_CLK);
-                if expect_full then
-                    assert FULL='1'
-                        report "FIFO unexpectedly not full!"
-                        severity FAILURE;
-                else
-                    assert FULL='0'
-                        report "FIFO unexpectedly full!"
-                        severity FAILURE;
-                end if;
-                
-                wait until falling_edge(WR_CLK);
-            end loop;
-            WR_EN   <= '0';
+            if expect_full then
+                assert FULL='1'
+                    report "FIFO unexpectedly not full!"
+                    severity FAILURE;
+            else
+                assert FULL='0'
+                    report "FIFO unexpectedly full!"
+                    severity FAILURE;
+            end if;
+            if expect_wr_ack then
+                assert WR_ACK='1'
+                    report "Could unexpectedly not write!"
+                    severity FAILURE;
+            else
+                assert WR_ACK='0'
+                    report "Could unexpectedly write!"
+                    severity FAILURE;
+            end if;
         end procedure;
     begin
-        WR_EN       <= '0';
-        din_counter := uns(0, din_counter'length);
-        wait until start_write;
-        
-        -- stage 0
-        write_bytes(din_counter, DEPTH, false);
-        wait until rising_edge(WR_CLK);
-        assert FULL='1'
-            report "FIFO unexpectedly not full!"
-            severity FAILURE;
-        
-        write_stage <= write_stage+1;
-        
-        -- stage 1
-        wait until read_stage=2;
-        
-        write_stage <= write_stage+1;
-        
-        -- stage 2
-        
-        write_bytes(din_counter, DEPTH, false);
-        wait until rising_edge(WR_CLK);
-        assert FULL='1'
-            report "FIFO unexpectedly not full!"
-            severity FAILURE;
-        write_bytes(din_counter, DEPTH, true);
-        
-        write_stage <= write_stage+1;
-        
-        wait;
+        if rising_edge(WR_CLK) then
+            write_counter   <= 0;
+            case write_stage is
+                
+                when 0 =>
+                    if start_write then
+                        write_stage <= 1;
+                    end if;
+                
+                when 1 =>
+                    write_counter   <= write_counter+1;
+                    case write_counter is
+                        when 32 =>
+                            test_flags(true, false);
+                            WR_EN   <= '0';
+                        when 33 =>
+                            test_flags(true, true);
+                        when 34 =>
+                            test_flags(false, true);
+                            write_stage <= 2;
+                        when others =>
+                            test_flags(write_counter>1, false);
+                            WR_EN       <= '1';
+                            din_counter <= din_counter+1;
+                            DIN         <= stdulv(din_counter);
+                    end case;
+                
+                when 2 =>
+                    if read_stage=3 then
+                        write_stage <= 3;
+                    end if;
+                
+                when others =>
+                    null;
+                
+            end case;
+        end if;
     end process;
     
-end behavioral;
+end behavior;
 
