@@ -17,7 +17,8 @@ use work.help_funcs.all;
 
 entity GRAY_CODE_COUNTER is
     generic (
-        WIDTH   : positive := 8
+        WIDTH           : positive := 8;
+        BINARY_START    : natural := 0
     );
     port (
         CLK : in std_ulogic;
@@ -25,24 +26,27 @@ entity GRAY_CODE_COUNTER is
         
         EN  : in std_ulogic;
         
-        COUNTER : out std_ulogic_vector(WIDTH-1 downto 0) := (others => '0')
+        COUNTER     : out std_ulogic_vector(WIDTH-1 downto 0) := (others => '0');
+        COUNTER_BIN : out std_ulogic_vector(WIDTH-1 downto 0) := (others => '0')
     );
 end GRAY_CODE_COUNTER;
 
 architecture rtl of GRAY_CODE_COUNTER is
-    signal bin_counter  : unsigned(WIDTH-1 downto 0) := (others => '0');
+    signal binary_counter   : unsigned(WIDTH-1 downto 0) := uns(BINARY_START, WIDTH);
 begin
     
-    COUNTER <=  bin_counter(WIDTH-1) &
-                stdulv(bin_counter(WIDTH-1 downto 1) xor bin_counter(WIDTH-2 downto 0));
+    COUNTER <=  binary_counter(WIDTH-1) &
+                stdulv(binary_counter(WIDTH-1 downto 1) xor binary_counter(WIDTH-2 downto 0));
+    
+    COUNTER_BIN <= stdulv(binary_counter);
     
     count_proc : process(RST, CLK)
     begin
         if RST='1' then
-            bin_counter <= (others => '0');
+            binary_counter  <= uns(BINARY_START, WIDTH);
         elsif rising_edge(CLK) then
             if EN='1' then
-                bin_counter <= bin_counter+1;
+                binary_counter  <= binary_counter+1;
             end if;
         end if;
     end process;
