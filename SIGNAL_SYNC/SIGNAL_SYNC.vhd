@@ -21,8 +21,7 @@ entity SIGNAL_SYNC is
         DEFAULT_VALUE   : std_ulogic := '0'
     );
     port (
-        CLK_IN  : in std_ulogic;
-        CLK_OUT : in std_ulogic;
+        CLK : in std_ulogic;
         
         DIN : in std_ulogic;
         
@@ -37,9 +36,9 @@ begin
 --    clk_out_fd0 : FD port map (C => CLK_OUT, D => q,    Q => DOUT);
 --    clk_out_fd1 : FD port map (C => CLK_OUT, D => DIN,  Q => q);
     
-    sync_proc : process(CLK_OUT)
+    sync_proc : process(CLK)
     begin
-        if rising_edge(CLK_OUT) then
+        if rising_edge(CLK) then
             DOUT    <= q;
             q       <= DIN;
         end if;

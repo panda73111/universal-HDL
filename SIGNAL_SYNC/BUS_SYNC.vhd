@@ -21,8 +21,7 @@ entity BUS_SYNC is
         WIDTH   : natural
     );
     port (
-        CLK_IN  : in std_ulogic;
-        CLK_OUT : in std_ulogic;
+        CLK : in std_ulogic;
         
         DIN : in std_ulogic_vector(WIDTH-1 downto 0);
         
@@ -34,9 +33,9 @@ architecture rtl of BUS_SYNC is
     signal q    : std_ulogic_vector(WIDTH-1 downto 0) := (others => '0');
 begin
     
-    sync_proc : process(CLK_OUT)
+    sync_proc : process(CLK)
     begin
-        if rising_edge(CLK_OUT) then
+        if rising_edge(CLK) then
             DOUT    <= q;
             q       <= DIN;
         end if;

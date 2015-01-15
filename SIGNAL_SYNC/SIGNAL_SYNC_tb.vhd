@@ -35,8 +35,7 @@ BEGIN
 
     SIGNAL_SYNC1_inst : entity work.SIGNAL_SYNC
         port map (
-            CLK_IN  => clk_in,
-            CLK_OUT => clk_out,
+            CLK => clk_out,
             
             DIN => d0,
             
@@ -45,8 +44,7 @@ BEGIN
 
     SIGNAL_SYNC2_inst : entity work.SIGNAL_SYNC
         port map (
-            CLK_IN  => clk_out,
-            CLK_OUT => clk_in,
+            CLK => clk_in,
             
             DIN => d1,
             
