@@ -103,9 +103,13 @@ begin
         
         wait until read_stage=3 and write_stage=3;
         
-        -- stage 3: write too much data to the FIFO
+        -- stage 3: single write
         
---        wait until read_stage=4 and write_stage=4;
+        wait until read_stage=4 and write_stage=4;
+        
+        -- stage 3: single read
+        
+        wait until read_stage=5 and write_stage=5;
         
         wait for 1 us;
         report "NONE. All tests completed."
@@ -113,33 +117,6 @@ begin
     end process;
     
     read_proc : process(RD_CLK)
-        procedure test_flags(
-            constant expect_valid   : in boolean;
-            constant expect_empty   : in boolean
-        ) is
-        begin
-            if expect_empty then
-                assert EMPTY='1'
-                    report "FIFO unexpectedly not empty!"
-                    severity FAILURE;
-            else
-                assert EMPTY='0'
-                    report "FIFO unexpectedly empty!"
-                    severity FAILURE;
-            end if;
-            if expect_valid then
-                assert VALID='1'
-                    report "Didn't get any data!"
-                    severity FAILURE;
-                assert DOUT=stdulv(dout_counter)
-                    report "Got wrong data!"
-                    severity FAILURE;
-            else
-                assert VALID='0'
-                    report "Got unexpected data!"
-                    severity FAILURE;
-            end if;
-        end procedure;
     begin
         if rising_edge(RD_CLK) then
             read_counter    <= 0;
@@ -159,54 +136,54 @@ begin
                     read_counter    <= read_counter+1;
                     case read_counter is
                         when 0 =>
-                            test_flags(false, false);
+                            RD_EN   <= '1';
+                        when 32 =>
+                            RD_EN   <= '0';
+                        when others =>
+                            assert read_counter<100
+                                report "Read timeout!"
+                                severity FAILURE;
+                    end case;
+                    if EMPTY='1' then
+                        read_stage  <= 3;
+                    end if;
+                
+                when 3 =>
+                    if write_stage=4 then
+                        read_stage  <= 4;
+                    end if;
+                
+                when 4 =>
+                    read_counter    <= read_counter+1;
+                    case read_counter is
+                        when 0 =>
                             RD_EN   <= '1';
                         when 1 =>
-                            test_flags(false, false);
-                        when 32 =>
-                            test_flags(true, false);
                             RD_EN   <= '0';
-                        when 33 =>
-                            test_flags(false, true);
-                            read_stage  <= 3;
                         when others =>
-                            test_flags(true, false);
-                            RD_EN           <= '1';
-                            dout_counter    <= dout_counter+1;
+                            assert read_counter<100
+                                report "Read timeout!"
+                                severity FAILURE;
                     end case;
+                    if EMPTY='1' then
+                        read_stage  <= 5;
+                    end if;
                 
                 when others =>
                     null;
                 
             end case;
+            
+            if VALID='1' then
+                assert DOUT=stdulv(dout_counter)
+                    report "Got wrong data!"
+                    severity FAILURE;
+                dout_counter    <= dout_counter+1;
+            end if;
         end if;
     end process;
     
     write_proc : process(WR_CLK)
-        procedure test_flags(
-            constant expect_wr_ack  : in boolean;
-            constant expect_full    : in boolean
-        ) is
-        begin
-            if expect_full then
-                assert FULL='1'
-                    report "FIFO unexpectedly not full!"
-                    severity FAILURE;
-            else
-                assert FULL='0'
-                    report "FIFO unexpectedly full!"
-                    severity FAILURE;
-            end if;
-            if expect_wr_ack then
-                assert WR_ACK='1'
-                    report "Could unexpectedly not write!"
-                    severity FAILURE;
-            else
-                assert WR_ACK='0'
-                    report "Could unexpectedly write!"
-                    severity FAILURE;
-            end if;
-        end procedure;
     begin
         if rising_edge(WR_CLK) then
             write_counter   <= 0;
@@ -219,25 +196,36 @@ begin
                 
                 when 1 =>
                     write_counter   <= write_counter+1;
-                    case write_counter is
-                        when 32 =>
-                            test_flags(true, false);
-                            WR_EN   <= '0';
-                        when 33 =>
-                            test_flags(true, true);
-                        when 34 =>
-                            test_flags(false, true);
-                            write_stage <= 2;
-                        when others =>
-                            test_flags(write_counter>1, false);
-                            WR_EN       <= '1';
-                            din_counter <= din_counter+1;
-                            DIN         <= stdulv(din_counter);
-                    end case;
+                    WR_EN           <= '0';
+                    if write_counter<32 then
+                        WR_EN       <= '1';
+                        DIN         <= stdulv(din_counter);
+                        din_counter <= din_counter+1;
+                    end if;
+                    if FULL='1' then
+                        write_stage <= 2;
+                    end if;
                 
                 when 2 =>
                     if read_stage=3 then
                         write_stage <= 3;
+                    end if;
+                
+                when 3 =>
+                    write_counter   <= write_counter+1;
+                    WR_EN           <= '0';
+                    if write_counter=0 then
+                        WR_EN       <= '1';
+                        DIN         <= stdulv(din_counter);
+                        din_counter <= din_counter+1;
+                    end if;
+                    if EMPTY='0' then
+                        write_stage <= 4;
+                    end if;
+                
+                when 4 =>
+                    if read_stage=5 then
+                        write_stage <= 5;
                     end if;
                 
                 when others =>

@@ -107,10 +107,9 @@ begin
             wr_p_bin    <= (others => '0');
             is_full     <= '0';
         elsif rising_edge(WR_CLK) then
-            WR_ACK  <= '0';
-            if WR_EN='1' and is_full='0' then
+            WR_ACK  <= wr_p_inc;
+            if wr_p_inc='1' then
                 ram(nat(wr_addr))  <= DIN;
-                WR_ACK  <= '1';
             end if;
             wr_p        <= wr_p_next;
             wr_p_bin    <= wr_p_bin_next;
@@ -126,10 +125,9 @@ begin
             rd_p_bin    <= (others => '0');
             is_empty    <= '1';
         elsif rising_edge(RD_CLK) then
-            VALID   <= '0';
-            DOUT    <= ram(nat(rd_addr));
-            if RD_EN='1' and is_empty_next='0' then
-                VALID   <= '1';
+            VALID       <= rd_p_inc;
+            if rd_p_inc='1' then
+                DOUT    <= ram(nat(rd_addr));
             end if;
             rd_p        <= rd_p_next;
             rd_p_bin    <= rd_p_bin_next;
