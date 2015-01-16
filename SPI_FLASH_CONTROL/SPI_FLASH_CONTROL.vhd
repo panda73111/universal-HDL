@@ -79,6 +79,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         -- Program
         PROGRAM_SEND_WRITE_ENABLE_COMMAND,
         PROGRAM_END_WRITE_ENABLE_COMMAND,
+        GET_FIRST_BYTE_TO_PROGRAM,
         SEND_PROGRAM_COMMAND,
         SEND_PROGRAM_ADDR,
         SEND_DATA,
@@ -121,7 +122,7 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal clk_out, clk_out_180 : std_ulogic := '0';
     signal clk_out_locked       : std_ulogic := '0';
     
-    signal rd_en_sync, wr_en_sync   : std_ulogic := '0';
+    signal rd_en_sync   : std_ulogic := '0';
     
     signal busy_unsync  : std_ulogic := '0';
     
@@ -131,6 +132,9 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal fifo_dout    : std_ulogic_vector(7 downto 0) := x"00";
     signal fifo_empty   : std_ulogic := '0';
     signal fifo_full    : std_ulogic := '0';
+    
+    signal next_data_byte       : std_ulogic_vector(7 downto 0) := x"00";
+    signal more_bytes_to_send   : std_ulogic := '0';
     
 begin
     
@@ -146,14 +150,14 @@ begin
     fifo_wr_en  <= WR_EN;
     
     -- apply data on the falling edge of C
-    mosi_SIGNAL_SYNC_inst   : entity work.SIGNAL_SYNC port map (clk_out, clk_out_180, cur_reg.mosi, MOSI);
-    sn_SIGNAL_SYNC_inst     : entity work.SIGNAL_SYNC generic map ('1') port map (clk_out, clk_out_180, cur_reg.sn, SN);
+    mosi_SIGNAL_SYNC_inst   : entity work.SIGNAL_SYNC port map (clk_out_180, cur_reg.mosi, MOSI);
+    sn_SIGNAL_SYNC_inst     : entity work.SIGNAL_SYNC generic map ('1') port map (clk_out_180, cur_reg.sn, SN);
     
-    rd_en_SIGNAL_SYNC_inst  : entity work.FLAG_SYNC port map (CLK, clk_out, RD_EN, rd_en_sync);
+    rd_en_SIGNAL_SYNC_inst  : entity work.SIGNAL_SYNC port map (clk_out, RD_EN, rd_en_sync);
     
     valid_SIGNAL_SYNC_inst  : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.valid, VALID);
     wr_ack_SIGNAL_SYNC_inst : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.wr_ack, WR_ACK);
-    busy_SIGNAL_SYNC_inst   : entity work.SIGNAL_SYNC port map (clk_out, CLK, busy_unsync, BUSY);
+    busy_SIGNAL_SYNC_inst   : entity work.SIGNAL_SYNC port map (CLK, busy_unsync, BUSY);
     
     CLK_MAN_inst : entity work.CLK_MAN
         generic map (
@@ -172,8 +176,7 @@ begin
     
     write_buffer_inst : entity work.ASYNC_FIFO_2CLK
         generic map (
-            DEPTH           => BUF_SIZE,
-            COUNT_ON_READ   => false
+            DEPTH   => BUF_SIZE
         )
         port map (
             RD_CLK  => clk_out,
@@ -189,7 +192,20 @@ begin
             EMPTY   => fifo_empty
         );
     
-    stm_proc : process(RST, cur_reg, ADDR, MISO, fifo_dout, fifo_empty, rd_en_sync)
+    byte_buffer_proc : process(clk_out)
+    begin
+        if rising_edge(clk_out) then
+            if cur_reg.fifo_rd_en='1' then
+                -- make sure the byte to send is available exactly
+                -- when the state machine needs it
+                -- (one more rd_en is needed)
+                next_data_byte      <= fifo_dout;
+                more_bytes_to_send  <= not fifo_empty;
+            end if;
+        end if;
+    end process;
+    
+    stm_proc : process(RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte, more_bytes_to_send)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -239,10 +255,10 @@ begin
                 r.data_bit_index                := cr.data_bit_index-1;
                 if cr.data_bit_index=0 then
                     r.valid := '1';
-                    if rd_en_sync='0' then
-                        r.sn    := '1';
-                        r.state := WAIT_FOR_INPUT;
-                    end if;
+                end if;
+                if rd_en_sync='0' then
+                    r.sn    := '1';
+                    r.state := WAIT_FOR_INPUT;
                 end if;
             
             -- Erase
@@ -323,7 +339,11 @@ begin
             when PROGRAM_END_WRITE_ENABLE_COMMAND =>
                 r.sn                := '1';
                 r.addr_bit_index    := uns(23, 6);
-                r.state             := SEND_PROGRAM_COMMAND;
+                r.state             := GET_FIRST_BYTE_TO_PROGRAM;
+            
+            when GET_FIRST_BYTE_TO_PROGRAM =>
+                r.fifo_rd_en    := '1';
+                r.state         := SEND_PROGRAM_COMMAND;
             
             when SEND_PROGRAM_COMMAND =>
                 r.sn                := '0';
@@ -336,20 +356,19 @@ begin
             when SEND_PROGRAM_ADDR =>
                 r.mosi              := ADDR(nat(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
-                if cr.addr_bit_index=0 then
+                if cr.addr_bit_index=1 then
                     r.fifo_rd_en    := '1';
+                elsif cr.addr_bit_index=0 then
                     r.state         := SEND_DATA;
                 end if;
             
             when SEND_DATA =>
-                r.mosi              := fifo_dout(nat(cr.data_bit_index));
+                r.mosi              := next_data_byte(nat(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
-                r.addr_bit_index    := uns(23, 6);
-                if cr.data_bit_index=0 then
+                if cr.data_bit_index=1 then
                     r.fifo_rd_en    := '1';
-                    if fifo_empty='1' then
-                        r.state := END_PROGRAM_COMMAND;
-                    end if;
+                elsif cr.data_bit_index=0 and more_bytes_to_send='0' then
+                    r.state := END_PROGRAM_COMMAND;
                 end if;
             
             when END_PROGRAM_COMMAND =>
