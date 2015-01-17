@@ -123,7 +123,8 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     signal clk_out, clk_out_180 : std_ulogic := '0';
     signal clk_out_locked       : std_ulogic := '0';
-    signal c_en                 : std_ulogic := '0';
+    signal oddr2_rst            : std_ulogic := '0';
+    signal oddr2_q              : std_ulogic := '0';
     
     signal rd_en_sync   : std_ulogic := '0';
     signal sn_sync      : std_ulogic := '0';
@@ -142,10 +143,9 @@ architecture rtl of SPI_FLASH_CONTROL is
 begin
     
     SN      <= sn_sync;
-    DOUT    <= cur_reg.data;
     
     busy_unsync <= '1' when cur_reg.state/=WAIT_FOR_INPUT or clk_out_locked='0' else '0';
-    c_en        <= not sn_sync;
+    oddr2_rst   <= sn_sync;
     
     FULL    <= fifo_full;
     
@@ -153,11 +153,19 @@ begin
     fifo_rd_en  <= cur_reg.fifo_rd_en;
     fifo_wr_en  <= WR_EN;
     
-    BUFGCE_inst : BUFGCE
+    c_ODDR2_inst : ODDR2
+        generic map (
+            INIT    => '0'
+        )
         port map (
-            I   => clk_out,
-            CE  => c_en,
-            O   => C
+            S   => '0',
+            R   => oddr2_rst,
+            D0  => '1',
+            D1  => '0',
+            C0  => clk_out,
+            C1  => clk_out_180,
+            CE  => '1',
+            Q   => C
         );
     
     -- apply data on the falling edge of C
@@ -166,9 +174,10 @@ begin
     
     rd_en_SIGNAL_SYNC_inst  : entity work.SIGNAL_SYNC port map (clk_out, RD_EN, rd_en_sync);
     
-    valid_SIGNAL_SYNC_inst  : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.valid, VALID);
-    wr_ack_SIGNAL_SYNC_inst : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.wr_ack, WR_ACK);
+    valid_FLAG_SYNC_inst    : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.valid, VALID);
+    wr_ack_FLAG_SYNC_inst   : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.wr_ack, WR_ACK);
     busy_SIGNAL_SYNC_inst   : entity work.SIGNAL_SYNC port map (CLK, busy_unsync, BUSY);
+    dout_BUS_SYNC_inst      : entity work.BUS_SYNC generic map (8) port map (CLK, cur_reg.data, DOUT);
     
     CLK_MAN_inst : entity work.CLK_MAN
         generic map (
@@ -379,8 +388,11 @@ begin
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=1 then
                     r.fifo_rd_en    := '1';
-                elsif cr.data_bit_index=0 and more_bytes_to_send='0' then
-                    r.state := END_PROGRAM_COMMAND;
+                elsif cr.data_bit_index=0 then
+                    r.wr_ack    := '1';
+                    if more_bytes_to_send='0' then
+                        r.state := END_PROGRAM_COMMAND;
+                    end if;
                 end if;
             
             when END_PROGRAM_COMMAND =>
