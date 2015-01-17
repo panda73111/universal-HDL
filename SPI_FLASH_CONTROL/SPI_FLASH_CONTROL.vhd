@@ -13,6 +13,8 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+library UNISIM;
+use UNISIM.VComponents.all;
 use work.help_funcs.all;
 
 entity SPI_FLASH_CONTROL is
@@ -39,7 +41,7 @@ entity SPI_FLASH_CONTROL is
         BUSY    : out std_ulogic := '0';
         FULL    : out std_ulogic := '0';
         MOSI    : out std_ulogic := '0';
-        C       : out std_ulogic := '0';
+        C       : out std_ulogic := '1';
         SN      : out std_ulogic := '1'
     );
 end SPI_FLASH_CONTROL;
@@ -121,9 +123,10 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     signal clk_out, clk_out_180 : std_ulogic := '0';
     signal clk_out_locked       : std_ulogic := '0';
+    signal c_en                 : std_ulogic := '0';
     
     signal rd_en_sync   : std_ulogic := '0';
-    
+    signal sn_sync      : std_ulogic := '0';
     signal busy_unsync  : std_ulogic := '0';
     
     signal fifo_din     : std_ulogic_vector(7 downto 0) := x"00";
@@ -138,20 +141,28 @@ architecture rtl of SPI_FLASH_CONTROL is
     
 begin
     
+    SN      <= sn_sync;
     DOUT    <= cur_reg.data;
     
     busy_unsync <= '1' when cur_reg.state/=WAIT_FOR_INPUT or clk_out_locked='0' else '0';
+    c_en        <= not sn_sync;
     
-    C       <= clk_out;
     FULL    <= fifo_full;
     
     fifo_din    <= DIN;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
     fifo_wr_en  <= WR_EN;
     
+    BUFGCE_inst : BUFGCE
+        port map (
+            I   => clk_out,
+            CE  => c_en,
+            O   => C
+        );
+    
     -- apply data on the falling edge of C
     mosi_SIGNAL_SYNC_inst   : entity work.SIGNAL_SYNC port map (clk_out_180, cur_reg.mosi, MOSI);
-    sn_SIGNAL_SYNC_inst     : entity work.SIGNAL_SYNC generic map ('1') port map (clk_out_180, cur_reg.sn, SN);
+    sn_SIGNAL_SYNC_inst     : entity work.SIGNAL_SYNC generic map ('1') port map (clk_out_180, cur_reg.sn, sn_sync);
     
     rd_en_SIGNAL_SYNC_inst  : entity work.SIGNAL_SYNC port map (clk_out, RD_EN, rd_en_sync);
     
@@ -220,6 +231,7 @@ begin
             when WAIT_FOR_INPUT =>
                 r.sn                := '1';
                 r.addr_bit_index    := uns(23, 6);
+                r.data_bit_index    := uns(7, 3);
                 if rd_en_sync='1' then
                     r.state := SEND_READ_COMMAND;
                 end if;

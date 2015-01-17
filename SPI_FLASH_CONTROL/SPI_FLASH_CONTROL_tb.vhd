@@ -96,7 +96,7 @@ BEGIN
         begin
             bit_loop : for i in 7 downto 1 loop
                 flash_cmd(i)    := mosi;
-                wait until rising_edge(c);
+                wait until rising_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
             end loop;
             flash_cmd(0)    := mosi;
@@ -106,18 +106,17 @@ BEGIN
         begin
             bit_loop : for i in 23 downto 1 loop
                 flash_addr(i)   := mosi;
-                wait until rising_edge(c);
+                wait until rising_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
             end loop;
             flash_addr(0)   := mosi;
-            report "sampling";
         end procedure;
         
         procedure get_data_byte(variable flash_data_byte : out std_ulogic_vector) is
         begin
             bit_loop : for i in 7 downto 1 loop
                 flash_data_byte(i)  := mosi;
-                wait until rising_edge(c);
+                wait until rising_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
             end loop;
             flash_data_byte(0)  := mosi;
@@ -126,30 +125,35 @@ BEGIN
         procedure send_status(variable flash_status : in std_ulogic_vector) is
         begin
             bit_loop : for i in 7 downto 1 loop
-                wait until falling_edge(c);
+                wait until falling_edge(c) or sn='1';
+                if sn='1' then exit bit_loop; end if;
                 miso    <= flash_status(i);
-                wait until rising_edge(c);
+                wait until rising_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
             end loop;
-            wait until falling_edge(c);
-            miso    <= flash_status(0);
+            if sn='0' then
+                wait until falling_edge(c) or sn='1';
+                miso    <= flash_status(0);
+            end if;
         end procedure;
         
         procedure send_data_byte is
         begin
             bit_loop : for i in 7 downto 1 loop
-                wait until falling_edge(c);
+                wait until falling_edge(c) or sn='1';
+                if sn='1' then exit bit_loop; end if;
                 miso    <= RETURN_BYTE(i);
-                report "setting";
-                wait until rising_edge(c);
+                wait until rising_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
             end loop;
-            wait until falling_edge(c);
-            miso    <= RETURN_BYTE(0);
+            if sn='0' then
+                wait until falling_edge(c) or sn='1';
+                miso    <= RETURN_BYTE(0);
+            end if;
         end procedure;
     begin
         flash_status    := x"00";
-        loop
+        main_loop : loop
             wait until rising_edge(c);
             
             if erasing and now-erase_start_time>=2 ms then
@@ -173,7 +177,7 @@ BEGIN
                 case flash_cmd is
                     
                     when CMD_WRITE_ENABLE =>
-                        wait until rising_edge(c);
+                        wait until rising_edge(c) or sn='1';
                         if sn='1' then
                             if flash_status(0)='0' then
                                 report "Setting WRITE ENABLE bit";
@@ -182,15 +186,17 @@ BEGIN
                         else
                             wait until sn='1';
                         end if;
-                        next;
+                        next main_loop;
                     
                     when CMD_READ_STATUS_REGISTER =>
                         while sn='0' loop
                             report "Sending status";
                             send_status(flash_status);
-                            wait until rising_edge(c);
+                            if sn='0' then
+                                wait until rising_edge(c) or sn='1';
+                            end if;
                         end loop;
-                        next;
+                        next main_loop;
                     
                     when others =>
                         if
@@ -200,12 +206,13 @@ BEGIN
                         then
                             report "Unknown command: " & hstr(flash_cmd);
                             if sn='0' then wait until sn='1'; end if;
-                            next;
+                            next main_loop;
                         end if;
                     
                 end case;
                 
-                wait until rising_edge(c);
+                wait until rising_edge(c) or sn='1';
+                if sn='1' then next main_loop; end if;
                 get_addr(flash_addr);
                 report "Got address: " & hstr(flash_addr);
                 
@@ -216,15 +223,17 @@ BEGIN
                             while sn='0' loop
                                 report "Reading byte: " & hstr(RETURN_BYTE);
                                 send_data_byte;
-                                wait until rising_edge(c);
+                                if sn='0' then
+                                    wait until rising_edge(c) or sn='1';
+                                end if;
                             end loop;
                         else
                             if sn='0' then wait until sn='1'; end if;
                         end if;
-                        next;
+                        next main_loop;
                     
                     when CMD_SECTOR_ERASE =>
-                        wait until rising_edge(c);
+                        wait until rising_edge(c) or sn='1';
                         if sn='1' then
                             if flash_status(1 downto 0)="10" then
                                 report "Erasing sector: " & hstr(flash_addr(23 downto 16) & x"0000");
@@ -232,26 +241,35 @@ BEGIN
                             flash_status(1) := '0';
                         else
                             wait until sn='1';
+                            report "Sector erase command not correctly finished!"
+                                severity WARNING;
+                            next main_loop;
                         end if;
                         erasing             := true;
                         erase_start_time    := now;
                         flash_status(0)     := '1';
-                        next;
+                        next main_loop;
                     
                     when CMD_PAGE_PROGRAM =>
-                        wait until rising_edge(c);
+                        wait until rising_edge(c) or sn='1';
+                        if sn='1' then next main_loop; end if;
                         while sn='0' loop
                             get_data_byte(flash_data_byte);
+                            if sn='1' then
+                                report "Program command not correctly finished!"
+                                    severity WARNING;
+                                next main_loop;
+                            end if;
                             if flash_status(1 downto 0)="10" then
                                 report "Writing byte: " & hstr(flash_data_byte);
                             end if;
-                            wait until rising_edge(c);
+                            wait until rising_edge(c) or sn='1';
                         end loop;
                         flash_status(1)     := '0';
                         programming         := true;
                         program_start_time  := now;
                         flash_status(0)     := '1';
-                        next;
+                        next main_loop;
                     
                     when others =>
                         null;
@@ -330,6 +348,7 @@ BEGIN
         addr    <= x"123456";
         rd_en   <= '1';
         for i in 0 to 15 loop
+            wait until rising_edge(clk);
             while valid='0' loop
                 wait until rising_edge(clk);
             end loop;
