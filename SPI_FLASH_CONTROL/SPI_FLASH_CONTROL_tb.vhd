@@ -41,10 +41,14 @@ ARCHITECTURE behavior OF SPI_FLASH_CONTROL_tb IS
     signal sn      : std_ulogic;
     
     -- clock period definitions
-    constant clk_period         : time := 10 ns;
+    constant clk_period         : time := 20 ns;
     constant clk_period_real    : real := real(clk_period / 1 ps) / real(1 ns / 1 ps);
     
-    constant RETURN_BYTE        : std_ulogic_vector(7 downto 0) := x"AB";
+    -- 4 Mbit
+    type flash_mem_type is
+        array(0 to 512*1024) of
+        std_ulogic_vector(7 downto 0);
+    signal flash_mem    : flash_mem_type  := (others => x"00");
     
 BEGIN
 
@@ -52,7 +56,7 @@ BEGIN
         generic map (
             CLK_IN_PERIOD   => clk_period_real,
             CLK_OUT_MULT    => 2,
-            CLK_OUT_DIV     => 4
+            CLK_OUT_DIV     => 5
         )
         port map (
             CLK => clk,
@@ -92,7 +96,7 @@ BEGIN
         variable programming        : boolean;
         variable program_start_time : time;
         
-        procedure get_cmd(variable flash_cmd : out cmd_type) is
+        procedure get_cmd is
         begin
             bit_loop : for i in 7 downto 1 loop
                 flash_cmd(i)    := mosi;
@@ -102,7 +106,7 @@ BEGIN
             flash_cmd(0)    := mosi;
         end procedure;
         
-        procedure get_addr(variable flash_addr : out std_ulogic_vector) is
+        procedure get_addr is
         begin
             bit_loop : for i in 23 downto 1 loop
                 flash_addr(i)   := mosi;
@@ -112,7 +116,7 @@ BEGIN
             flash_addr(0)   := mosi;
         end procedure;
         
-        procedure get_data_byte(variable flash_data_byte : out std_ulogic_vector) is
+        procedure get_data_byte is
         begin
             bit_loop : for i in 7 downto 1 loop
                 flash_data_byte(i)  := mosi;
@@ -122,7 +126,7 @@ BEGIN
             flash_data_byte(0)  := mosi;
         end procedure;
         
-        procedure send_status(variable flash_status : in std_ulogic_vector) is
+        procedure send_status is
         begin
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(c) or sn='1';
@@ -142,13 +146,13 @@ BEGIN
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
-                miso    <= RETURN_BYTE(i);
+                miso    <= flash_mem(nat(flash_addr))(i);
                 wait until rising_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
             end loop;
             if sn='0' then
                 wait until falling_edge(c) or sn='1';
-                miso    <= RETURN_BYTE(0);
+                miso    <= flash_mem(nat(flash_addr))(0);
             end if;
         end procedure;
     begin
@@ -171,8 +175,8 @@ BEGIN
             
             if sn='0' then
                 
-                get_cmd(flash_cmd);
-                report "Got command: " & hstr(flash_cmd);
+                get_cmd;
+                report "Got command: 0x" & hstr(flash_cmd);
                 
                 case flash_cmd is
                     
@@ -191,7 +195,7 @@ BEGIN
                     when CMD_READ_STATUS_REGISTER =>
                         while sn='0' loop
                             report "Sending status";
-                            send_status(flash_status);
+                            send_status;
                             if sn='0' then
                                 wait until rising_edge(c) or sn='1';
                             end if;
@@ -213,16 +217,17 @@ BEGIN
                 
                 wait until rising_edge(c) or sn='1';
                 if sn='1' then next main_loop; end if;
-                get_addr(flash_addr);
-                report "Got address: " & hstr(flash_addr);
+                get_addr;
+                report "Got address: 0x" & hstr(flash_addr, false);
                 
                 case flash_cmd is
                     
                     when CMD_READ_DATA_BYTES =>
                         if flash_status(0)='0' then
                             while sn='0' loop
-                                report "Reading byte: " & hstr(RETURN_BYTE);
+                                report "Reading byte: 0x" & hstr(flash_mem(nat(flash_addr))) & " at 0x" & hstr(flash_addr, false);
                                 send_data_byte;
+                                flash_addr  := flash_addr+1;
                                 if sn='0' then
                                     wait until rising_edge(c) or sn='1';
                                 end if;
@@ -236,7 +241,7 @@ BEGIN
                         wait until rising_edge(c) or sn='1';
                         if sn='1' then
                             if flash_status(1 downto 0)="10" then
-                                report "Erasing sector: " & hstr(flash_addr(23 downto 16) & x"0000");
+                                report "Erasing sector: 0x" & hstr(flash_addr(23 downto 16) & x"0000", false);
                             end if;
                             flash_status(1) := '0';
                         else
@@ -254,14 +259,16 @@ BEGIN
                         wait until rising_edge(c) or sn='1';
                         if sn='1' then next main_loop; end if;
                         while sn='0' loop
-                            get_data_byte(flash_data_byte);
+                            get_data_byte;
                             if sn='1' then
                                 report "Program command not correctly finished!"
                                     severity WARNING;
                                 next main_loop;
                             end if;
                             if flash_status(1 downto 0)="10" then
-                                report "Writing byte: " & hstr(flash_data_byte);
+                                report "Writing byte: 0x" & hstr(flash_data_byte) & " at 0x" & hstr(flash_addr, false);
+                                flash_mem(nat(flash_addr))  <= flash_data_byte;
+                                flash_addr(15 downto 0)     := flash_addr(15 downto 0)+1;
                             end if;
                             wait until rising_edge(c) or sn='1';
                         end loop;
@@ -282,6 +289,7 @@ BEGIN
     
     -- Stimulus process
     stim_proc: process
+        variable flash_addr : std_ulogic_vector(23 downto 0);
     begin
         -- hold reset state for 100 ns.
         rst <= '1';
@@ -294,28 +302,11 @@ BEGIN
         
         wait until rising_edge(clk) and busy='0';
         
-        -- read one byte at address 0xABCDEF
+        -- write one byte 0x77 at address 0xABCD
+        flash_addr  := x"00ABCD";
         report "Starting test 1";
         wait until rising_edge(clk);
-        addr    <= x"ABCDEF";
-        rd_en   <= '1';
-        while valid='0' loop
-            wait until rising_edge(clk);
-        end loop;
-        assert dout=RETURN_BYTE
-            report "Got wrong data!"
-            severity FAILURE;
-        rd_en   <= '0';
-        wait until rising_edge(clk);
-        
-        wait until falling_edge(busy);
-        wait for 10 us;
-        
-        -- write one byte 0x77 at address 0xABCDEF
-        report "---------------";
-        report "Starting test 2";
-        wait until rising_edge(clk);
-        addr    <= x"ABCDEF";
+        addr    <= flash_addr;
         din     <= x"77";
         wr_en   <= '1';
         wait until rising_edge(clk);
@@ -325,14 +316,34 @@ BEGIN
         wait until falling_edge(busy);
         wait for 10 us;
         
-        -- write 16 bytes 0xC0 - 0xD0 at address 0xFEDCBA
+        -- read one byte at address 0xABCD
+        flash_addr  := x"00ABCD";
+        report "---------------";
+        report "Starting test 2";
+        wait until rising_edge(clk);
+        addr    <= flash_addr;
+        rd_en   <= '1';
+        while valid='0' loop
+            wait until rising_edge(clk);
+        end loop;
+        assert dout=flash_mem(nat(flash_addr))
+            report "Got wrong data!"
+            severity FAILURE;
+        rd_en   <= '0';
+        wait until rising_edge(clk);
+        
+        wait until falling_edge(busy);
+        wait for 10 us;
+        
+        -- write 1024 bytes (8 bit counter) at address 0x60000
+        flash_addr  := x"060000";
         report "---------------";
         report "Starting test 3";
         wait until rising_edge(clk);
-        addr    <= x"FEDCBA";
+        addr    <= flash_addr;
         wr_en   <= '1';
-        for i in 192 to 208 loop
-            din <= stdulv(i, 8);
+        for i in 0 to 1023 loop
+            din <= stdulv(i mod 256, 8);
             wait until rising_edge(clk);
         end loop;
         wr_en   <= '0';
@@ -341,19 +352,22 @@ BEGIN
         wait until falling_edge(busy);
         wait for 10 us;
         
-        -- read 16 bytes at address 0x123456
+        -- read 1024 bytes at address 0x060000
+        flash_addr  := x"060000";
         report "---------------";
         report "Starting test 4";
         wait until rising_edge(clk);
-        addr    <= x"123456";
+        addr    <= flash_addr;
         rd_en   <= '1';
-        for i in 0 to 15 loop
+        for i in 0 to 1023 loop
             wait until rising_edge(clk);
             while valid='0' loop
                 wait until rising_edge(clk);
             end loop;
-            assert dout=RETURN_BYTE
-                report "Got wrong data!"
+            assert dout=flash_mem(nat(flash_addr)+i)
+                report "Got wrong data at 0x" & hstr(flash_addr+i, false) &
+                        ": expected 0x" & hstr(flash_mem(nat(flash_addr)+i)) &
+                        ", got 0x" & hstr(dout) & "!"
                 severity FAILURE;
         end loop;
         rd_en   <= '0';

@@ -177,7 +177,7 @@ begin
     valid_FLAG_SYNC_inst    : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.valid, VALID);
     wr_ack_FLAG_SYNC_inst   : entity work.FLAG_SYNC port map (clk_out, CLK, cur_reg.wr_ack, WR_ACK);
     busy_SIGNAL_SYNC_inst   : entity work.SIGNAL_SYNC port map (CLK, busy_unsync, BUSY);
-    dout_BUS_SYNC_inst      : entity work.BUS_SYNC generic map (8) port map (CLK, cur_reg.data, DOUT);
+    dout_BUS_SYNC_inst      : entity work.BUS_SYNC generic map (8, 3) port map (CLK, cur_reg.data, DOUT);
     
     CLK_MAN_inst : entity work.CLK_MAN
         generic map (
