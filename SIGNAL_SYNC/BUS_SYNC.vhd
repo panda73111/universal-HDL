@@ -35,24 +35,19 @@ architecture rtl of BUS_SYNC is
                     := (others => '0');
 begin
     
-    shift_gen : if SHIFT_LEVELS>2 generate
+    bus_SIGNAL_SYNC_gen : for i in 0 to WIDTH-1 generate
         
-        shift_proc : process(CLK)
-        begin
-            if rising_edge(CLK) then
-                q(q'high downto WIDTH)    <= q(q'high-WIDTH downto 0);
-            end if;
-        end process;
+        bit_SIGNAL_SYNC_inst : entity work.SIGNAL_SYNC
+            generic map (
+                SHIFT_LEVELS    => SHIFT_LEVELS
+            )
+            port map (
+                CLK     => CLK,
+                DIN     => DIN(i),
+                DOUT    => DOUT(i)
+            );
         
     end generate;
-    
-    sync_proc : process(CLK)
-    begin
-        if rising_edge(CLK) then
-            DOUT                <= q(q'high downto q'high-WIDTH+1);
-            q(WIDTH-1 downto 0) <= DIN;
-        end if;
-    end process;
     
 end rtl;
 
