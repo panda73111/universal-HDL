@@ -43,6 +43,9 @@ BEGIN
         );
 
     SIGNAL_SYNC2_inst : entity work.SIGNAL_SYNC
+        generic map (
+            SHIFT_LEVELS    => 8
+        )
         port map (
             CLK => clk_in,
             
@@ -72,7 +75,8 @@ BEGIN
         
         end loop;
         
-        wait;
+        report "NONE. All tests completed."
+            severity FAILURE;
     end process;
 
 END;

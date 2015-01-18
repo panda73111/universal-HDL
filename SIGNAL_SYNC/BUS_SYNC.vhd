@@ -18,7 +18,8 @@ use UNISIM.VComponents.all;
 
 entity BUS_SYNC is
     generic (
-        WIDTH   : natural
+        WIDTH           : positive := 8;
+        SHIFT_LEVELS    : positive range 2 to 16 := 2
     );
     port (
         CLK : in std_ulogic;
@@ -30,14 +31,26 @@ entity BUS_SYNC is
 end BUS_SYNC;
 
 architecture rtl of BUS_SYNC is
-    signal q    : std_ulogic_vector(WIDTH-1 downto 0) := (others => '0');
+    signal q    : std_ulogic_vector(WIDTH*(SHIFT_LEVELS-1)-1 downto 0)
+                    := (others => '0');
 begin
+    
+    shift_gen : if SHIFT_LEVELS>2 generate
+        
+        shift_proc : process(CLK)
+        begin
+            if rising_edge(CLK) then
+                q(q'high downto WIDTH)    <= q(q'high-WIDTH downto 0);
+            end if;
+        end process;
+        
+    end generate;
     
     sync_proc : process(CLK)
     begin
         if rising_edge(CLK) then
-            DOUT    <= q;
-            q       <= DIN;
+            DOUT                <= q(q'high downto q'high-WIDTH+1);
+            q(WIDTH-1 downto 0) <= DIN;
         end if;
     end process;
     

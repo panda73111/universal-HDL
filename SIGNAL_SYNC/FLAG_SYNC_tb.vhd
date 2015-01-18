@@ -28,8 +28,10 @@ ARCHITECTURE behavior OF FLAG_SYNC_tb IS
     signal d0, d1, d2   : std_logic := '0';
 
     -- Clock period definitions
-    constant clk_in_period  : time := 10 ns;
-    constant clk_out_period : time := 33 ns;
+    constant clk_in_period  : time := 50 ns; -- 20 MHz
+    constant clk_out_period : time := 20 ns; -- 50 MHz
+    
+    signal flag_count   : natural := 0;
 
 BEGIN
 
@@ -44,6 +46,9 @@ BEGIN
         );
 
     FLAG_SYNC2_inst : entity work.FLAG_SYNC
+        generic map (
+            SHIFT_LEVELS    => 8
+        )
         port map (
             CLK_IN  => clk_out,
             CLK_OUT => clk_in,
@@ -65,16 +70,23 @@ BEGIN
         
         -- insert stimulus here 
         
-        for i in 1 to 10 loop
-            
-            d0  <= '1';
-            wait for clk_in_period*i;
-            d0  <= '0';
-            wait for clk_in_period*10*i;
-        
+        for keep_high in 0 to 1 loop
+            flag_count  <= 0;
+            for i in 0 to 1023 loop
+                
+                d0  <= '1';
+                wait for clk_in_period*((i*keep_high)+1);
+                d0  <= '0';
+                wait for clk_in_period*7*((i*keep_high)+1);
+                
+                flag_count  <= flag_count+1;
+                
+            end loop;
+            wait for 10 us;
         end loop;
         
-        wait;
+        report "NONE. All tests completed."
+            severity FAILURE;
     end process;
 
 END;
