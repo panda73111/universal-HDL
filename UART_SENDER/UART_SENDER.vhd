@@ -20,11 +20,11 @@ use work.help_funcs.all;
 entity UART_SENDER is
     generic (
         CLK_IN_PERIOD   : real;
-        BAUD_RATE       : natural := 115_200;
-        DATA_BITS       : natural range 5 to 8 := 8;
-        STOP_BITS       : natural range 1 to 2 := 1;
+        BAUD_RATE       : positive := 115_200;
+        DATA_BITS       : positive range 5 to 8 := 8;
+        STOP_BITS       : positive range 1 to 2 := 1;
         PARITY_BIT_TYPE : natural range 0 to 2 := 0;
-        BUFFER_SIZE     : natural := 512
+        BUFFER_SIZE     : positive := 512
     );
     port (
         CLK : in std_ulogic;
