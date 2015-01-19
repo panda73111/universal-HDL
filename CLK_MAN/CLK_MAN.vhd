@@ -31,10 +31,7 @@ entity CLK_MAN is
         
         CLK_OUT     : out std_ulogic := '0';
         CLK_OUT_180 : out std_ulogic := '0';
-        
-        CLK_IN_STOPPED  : out std_ulogic := '0';
-        CLK_OUT_STOPPED : out std_ulogic := '0';
-        LOCKED          : out std_ulogic := '0'
+        LOCKED      : out std_ulogic := '0'
     );
 end;
 
@@ -71,13 +68,19 @@ architecture rtl of CLK_MAN is
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
     
-    signal status   : std_logic_vector(1 downto 0) := "00";
-    signal progdone : std_ulogic := '0';
+    signal rst_dcm          : std_ulogic := '0';
+    signal dcm_locked       : std_ulogic := '0';
+    signal dcm_status       : std_logic_vector(1 downto 0) := "00";
+    signal clkfx_stopped    : std_ulogic := '0';
+    signal progdone         : std_ulogic := '0';
+    signal rst_dcm_holder   : std_ulogic_vector(3 downto 0) := x"F";
     
 begin
     
-    CLK_IN_STOPPED  <= std_ulogic(status(0));
-    CLK_OUT_STOPPED <= std_ulogic(status(1));
+    LOCKED  <= dcm_locked;
+    
+    clkfx_stopped   <= dcm_status(1);
+    rst_dcm         <= RST or (clkfx_stopped and not dcm_locked);
     
     inst_dcm_clkgen : DCM_CLKGEN
         generic map (
@@ -87,7 +90,7 @@ begin
             )
         port map (
             CLKIN       => CLK_IN,
-            RST         => RST,
+            RST         => rst_dcm_holder(3),
             
             FREEZEDCM   => '0',
             
@@ -98,11 +101,21 @@ begin
             
             CLKFX       => CLK_OUT,
             CLKFX180    => CLK_OUT_180,
-            STATUS      => status,
-            LOCKED      => LOCKED
+            STATUS      => dcm_status,
+            LOCKED      => dcm_locked
             );
     
-    stm_proc : process(cur_reg, RST, REPROG_EN, REPROG_MULT, REPROG_DIV, PROGDONE)
+    dcm_rst_holder_proc : process(rst_dcm, CLK_IN)
+    begin
+        if rst_dcm='1' then
+            rst_dcm_holder  <= x"F";
+        elsif rising_edge(CLK_IN) then
+            rst_dcm_holder(3 downto 1)  <= rst_dcm_holder(2 downto 0);
+            rst_dcm_holder(0)           <= '0';
+        end if;
+    end process;
+    
+    stm_proc : process(cur_reg, RST, REPROG_EN, REPROG_MULT, REPROG_DIV, progdone)
         
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
