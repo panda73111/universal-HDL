@@ -2,112 +2,117 @@ library ieee;
 use ieee.std_logic_1164.all;
 use std.textio.all;
 
-
 package txt_util is
-
+    
     -- prints a message to the screen
-    procedure print(text : string);
-
+    procedure print(text : in string);
+    
     -- prints the message when active
     -- useful for debug switches
     procedure print(active : boolean; text : string);
-
+    
     -- converts std_ulogic into a character
     function chr(sl : std_ulogic) return character;
-
+    
     -- converts std_ulogic into a string (1 to 1)
     function str(sl : std_ulogic) return string;
-
+    
     -- converts std_ulogic_vector into a string (binary base)
     function str(slv : std_ulogic_vector) return string;
-
+    
     -- converts boolean into a string
     function str(b : boolean) return string;
-
+    
     -- converts an integer into a single character
     -- (can also be used for hex conversion and other bases)
-    function chr(int : integer) return character;
-
+    function chr(i : integer) return character;
+    
     -- converts integer into string using specified base
-    function str(int : integer; base : integer) return string;
-
+    function str(i : integer; base : positive) return string;
+    
     -- converts integer to string, using base 10
-    function str(int : integer) return string;
-
+    function str(i : integer) return string;
+    
     -- convert std_ulogic_vector into a string in hex format
     function hstr(slv : std_ulogic_vector) return string;
     function hstr(slv : std_ulogic_vector; spaced : boolean) return string;
-
+    
     -- repeat a character
-    function str(c : character; n : natural) return string;
-
-    -- functions to manipulate strings
-    -----------------------------------
-
+    function str(c : character; n : positive) return string;
+    
+    -- number to padded string conversion
+    function pad_left(i : integer; l : positive; c : character) return string;
+    function pad_right(i : integer; l : positive; c : character) return string;
+    
+    
+    ---------------------------------------
+    --- functions to manipulate strings ---
+    ---------------------------------------
+    
     -- convert a character to upper case
     function to_upper(c : character) return character;
-
+    
     -- convert a character to lower case
     function to_lower(c : character) return character;
-
+    
     -- convert a string to upper case
     function to_upper(s : string) return string;
-
+    
     -- convert a string to lower case
     function to_lower(s : string) return string;
-
-
-
-    -- functions to convert strings into other formats
-    --------------------------------------------------
-
+    
+    
+    -------------------------------------------------------
+    --- functions to convert strings into other formats ---
+    -------------------------------------------------------
+    
     -- converts a character into std_ulogic
     function to_std_ulogic(c : character) return std_ulogic;
-
+    
     -- converts a string into std_ulogic_vector
     function to_std_ulogic_vector(s : string) return std_ulogic_vector;
-
-
-
-    -- file I/O
-    -----------
-
+    
+    
+    ----------------
+    --- file I/O ---
+    ----------------
+    
     -- read variable length string from input file
     procedure str_read(file in_file :     text;
                        res_string   : out string);
-
+    
     -- print string to a file and start new line
     procedure print(file out_file :    text;
                     new_string    : in string);
-
+    
     -- print character to a file and start new line
     procedure print(file out_file :    text;
                     char          : in character);
-
-end txt_util;
+    
+end;
 
 package body txt_util is
-
+    
     -- prints text to the screen
-
-    procedure print(text : string) is
+    
+    procedure print(text : in string) is
         variable msg_line : line;
     begin
         write(msg_line, text);
         writeline(output, msg_line);
-    end print;
-
+    end procedure;
+    
     -- prints text to the screen when active
-
+    
     procedure print(active : boolean; text : string) is
     begin
         if active then
             print(text);
         end if;
-    end print;
-
+    end procedure;
+    
     -- converts std_ulogic into a character
-
+    
     function chr(sl : std_ulogic) return character is
         variable c : character;
     begin
@@ -123,22 +128,22 @@ package body txt_util is
             when '-' => c := '-';
         end case;
         return c;
-    end chr;
-
+    end function;
+    
     -- converts std_ulogic into a string (1 to 1)
-
+    
     function str(sl : std_ulogic) return string is
         variable s : string(1 to 1);
     begin
         s(1) := chr(sl);
         return s;
-    end str;
-
+    end function;
+    
     -- converts std_ulogic_vector into a string (binary base)
     -- (this also takes care of the fact that the range of
     --  a string is natural while a std_ulogic_vector may
     --  have an integer range)
-
+    
     function str(slv : std_ulogic_vector) return string is
         variable result : string (1 to slv'length);
         variable r      : integer;
@@ -149,26 +154,28 @@ package body txt_util is
             r         := r + 1;
         end loop;
         return result;
-    end str;
-
+    end function;
+    
+    -- converts boolean into a string
+    
     function str(b : boolean) return string is
     begin
         if b then
             return "true";
         end if;
         return "false";
-    end str;
-
+    end function;
+    
     -- converts an integer into a character
     -- for 0 to 9 the obvious mapping is used, higher
     -- values are mapped to the characters A-Z
     -- (this is usefull for systems with base > 10)
     -- (adapted from Steve Vogwell's posting in comp.lang.vhdl)
-
-    function chr(int : integer) return character is
+    
+    function chr(i : integer) return character is
         variable c : character;
     begin
-        case int is
+        case i is
             when 0      => c := '0';
             when 1      => c := '1';
             when 2      => c := '2';
@@ -208,55 +215,56 @@ package body txt_util is
             when others => c := '?';
         end case;
         return c;
-    end chr;
-
+    end function;
+    
     -- convert integer to string using specified base
     -- (adapted from Steve Vogwell's posting in comp.lang.vhdl)
-
-    function str(int : integer; base : integer) return string is
-        variable temp    : string(1 to 10);
-        variable num     : integer;
-        variable abs_int : integer;
-        variable len     : integer := 1;
-        variable power   : integer := 1;
+    
+    function str(i : integer; base : positive) return string is
+        variable temp   : string(1 to 10);
+        variable num    : integer;
+        variable abs_i  : natural;
+        variable len    : integer := 1;
+        variable power  : integer := 1;
     begin
         -- bug fix for negative numbers
-        abs_int := abs(int);
-
-        num := abs_int;
-
-        while num >= base loop          -- Determine how many
-            len := len + 1;             -- characters required
-            num := num / base;          -- to represent the
-        end loop;  -- number.
-
-        for i in len downto 1 loop                   -- Convert the number to
-            temp(i) := chr(abs_int/power mod base);  -- a string starting
-            power   := power * base;                 -- with the right hand
-        end loop;  -- side.
-
+        abs_i   := abs(i);
+        num     := abs_i;
+        
+        while num >= base loop -- Determine how many
+            len := len + 1;    -- characters required
+            num := num / base; -- to represent the
+        end loop;              -- number.
+        
+        for i in len downto 1 loop                -- Convert the number to
+            temp(i) := chr(abs_i/power mod base); -- a string starting
+            power   := power * base;              -- with the right hand
+        end loop;                                 -- side.
+        
         -- return result and add sign if required
-        if int < 0 then
-            return '-'& temp(1 to len);
+        if i < 0 then
+            return '-' & temp(1 to len);
         end if;
         return temp(1 to len);
-    end str;
-
+    end function;
+    
     -- convert integer to string, using base 10
-    function str(int : integer) return string is
+    
+    function str(i : integer) return string is
     begin
-        return str(int, 10);
-    end str;
-
+        return str(i, 10);
+    end function;
+    
+    -- convert std_ulogic_vector into a string in hex format
+    
     function hstr(slv : std_ulogic_vector) return string is
     begin
         return hstr(slv, TRUE);
-    end hstr;
-
-    -- converts a std_ulogic_vector into a hex string.
+    end function;
+    
     function hstr(slv : std_ulogic_vector; spaced : boolean) return string is
-        constant unsp_hexlen : natural                                         := (slv'length + 7) / 8 * 2;
-        constant sp_hexlen   : natural                                         := unsp_hexlen + (slv'length - 1) / 8;
+        constant unsp_hexlen : natural  := (slv'length + 7) / 8 * 2;
+        constant sp_hexlen   : natural  := unsp_hexlen + (slv'length - 1) / 8;
         variable hexlen      : natural range 1 to sp_hexlen;
         -- round slv to the next multiple of 4
         variable padded_slv  : std_ulogic_vector(unsp_hexlen * 4 - 1 downto 0) := (others => '0');
@@ -301,22 +309,48 @@ package body txt_util is
             return hex(1 to unsp_hexlen);
         end if;
         return hex;
-    end hstr;
-
-    function str(c : character; n : natural) return string is
+    end function;
+    
+    -- repeat a character
+    
+    function str(c : character; n : positive) return string is
         variable tmp : string(1 to n);
     begin
         for i in 1 to n loop
             tmp(i) := c;
         end loop;
         return tmp;
-    end str;
-
-    -- functions to manipulate strings
-    -----------------------------------
-
+    end function;
+    
+    -- number to left padded string conversion
+    
+    function pad_left(i : integer; l : positive; c : character) return string is
+        constant unpadded   : string := str(i);
+    begin
+        if l>unpadded'length then
+            return str(c, l-unpadded'length) & unpadded;
+        end if;
+        return unpadded;
+    end function;
+    
+    -- number to right padded string conversion
+    
+    function pad_right(i : integer; l : positive; c : character) return string is
+        constant unpadded   : string := str(i);
+    begin
+        if l>unpadded'length then
+            return unpadded & str(c, l-unpadded'length);
+        end if;
+        return unpadded;
+    end function;
+    
+    
+    ---------------------------------------
+    --- functions to manipulate strings ---
+    ---------------------------------------
+    
     -- convert a character to upper case
-
+    
     function to_upper(c : character) return character is
         variable u : character;
     begin
@@ -349,20 +383,16 @@ package body txt_util is
             when 'z'    => u := 'Z';
             when others => u := c;
         end case;
-
+        
         return u;
-
-    end to_upper;
-
-
+        
+    end function;
+    
     -- convert a character to lower case
-
+    
     function to_lower(c : character) return character is
-
         variable l : character;
-
     begin
-
         case c is
             when 'A'    => l := 'a';
             when 'B'    => l := 'b';
@@ -393,10 +423,10 @@ package body txt_util is
             when others => l := c;
         end case;
         return l;
-    end to_lower;
-
+    end function;
+    
     -- convert a string to upper case
-
+    
     function to_upper(s : string) return string is
         variable uppercase : string (s'range);
     begin
@@ -404,27 +434,26 @@ package body txt_util is
             uppercase(i) := to_upper(s(i));
         end loop;
         return uppercase;
-    end to_upper;
-
+    end function;
+    
     -- convert a string to lower case
-
+    
     function to_lower(s : string) return string is
         variable lowercase : string (s'range);
     begin
-
         for i in s'range loop
             lowercase(i) := to_lower(s(i));
         end loop;
         return lowercase;
-
-    end to_lower;
-
-
-
--- functions to convert strings into other types
-
--- converts a character into a std_ulogic
-
+    end function;
+    
+    
+    -----------------------------------------------------
+    --- functions to convert strings into other types ---
+    -----------------------------------------------------
+    
+    -- converts a character into a std_ulogic
+    
     function to_std_ulogic(c : character) return std_ulogic is
         variable sl : std_ulogic;
     begin
@@ -441,10 +470,10 @@ package body txt_util is
             when others => sl := 'X';
         end case;
         return sl;
-    end to_std_ulogic;
-
--- converts a string into std_ulogic_vector
-
+    end function;
+    
+    -- converts a string into std_ulogic_vector
+    
     function to_std_ulogic_vector(s : string) return std_ulogic_vector is
         variable slv : std_ulogic_vector(s'high-s'low downto 0);
         variable k   : integer;
@@ -455,20 +484,19 @@ package body txt_util is
             k      := k - 1;
         end loop;
         return slv;
-    end to_std_ulogic_vector;
-
-----------------
---  file I/O  --
-----------------
-
--- read variable length string from input file
-
+    end function;
+    
+    ------------------
+    ---  file I/O  ---
+    ------------------
+    
+    -- read variable length string from input file
+    
     procedure str_read(file in_file : text; res_string : out string) is
         variable l         : line;
         variable c         : character;
         variable is_string : boolean;
     begin
-
         readline(in_file, l);
         -- clear the contents of the result string
         for i in res_string'range loop
@@ -483,29 +511,30 @@ package body txt_util is
                 exit;
             end if;
         end loop;
-    end str_read;
-
--- print string to a file
+    end procedure;
+    
+    -- print string to a file
+    
     procedure print(file out_file : text; new_string : in string) is
         variable l : line;
     begin
         write(l, new_string);
         writeline(out_file, l);
-    end print;
-
--- print character to a file and start new line
+    end procedure;
+    
+    -- print character to a file and start new line
+    
     procedure print(file out_file : text;  char : in character) is
         variable l : line;
     begin
         write(l, char);
         writeline(out_file, l);
-    end print;
-
--- appends contents of a string to a file until line feed occurs
--- (LF is considered to be the end of the string)
-
-    procedure str_write(file out_file :    text;
-                        new_string    : in string) is
+    end procedure;
+    
+    -- appends contents of a string to a file until line feed occurs
+    -- (LF is considered to be the end of the string)
+    
+    procedure str_write(file out_file : text; new_string : in string) is
     begin
         for i in new_string'range loop
             print(out_file, new_string(i));
@@ -513,6 +542,6 @@ package body txt_util is
                 exit;
             end if;
         end loop;
-    end str_write;
-
-end txt_util;
+    end procedure;
+    
+end;
