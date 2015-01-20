@@ -33,6 +33,7 @@ entity UART_RECEIVER is
         DOUT    : out std_ulogic_vector(DATA_BITS-1 downto 0);
         VALID   : out std_ulogic := '0';
         FULL    : out std_ulogic := '0';
+        EMPTY   : out std_ulogic := '0';
         ERROR   : out std_ulogic := '0';
         BUSY    : out std_ulogic := '0'
     );
@@ -83,7 +84,6 @@ architecture rtl of UART_RECEIVER is
         error       => '0'
     );
     
-    signal fifo_empty           : std_ulogic := '0';
     signal cycle_half           : boolean := false;
     signal cur_reg, next_reg    : reg_type := reg_type_def;
     
@@ -110,7 +110,7 @@ begin
             DOUT    => DOUT,
             RD_ACK  => VALID,
             FULL    => FULL,
-            EMPTY   => fifo_empty
+            EMPTY   => EMPTY
         );
     
     stm_proc : process(cur_reg, RST, RXD, cycle_half)
