@@ -40,7 +40,7 @@ end ASYNC_FIFO;
 
 architecture rtl of ASYNC_FIFO is
     type ram_type is array(0 to DEPTH-1) of std_ulogic_vector(WIDTH-1 downto 0);
-    signal ram      : ram_type;
+    signal ram      : ram_type := (others => (others => '0'));
     signal rd_p     : natural range 0 to DEPTH-1 := 0;
     signal wr_p     : natural range 0 to DEPTH-1 := 0;
     signal cnt_u    : natural range 0 to DEPTH := 0;

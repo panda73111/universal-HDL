@@ -46,7 +46,7 @@ architecture rtl of ASYNC_FIFO_2CLK is
         array(0 to DEPTH-1) of
         std_ulogic_vector(WIDTH-1 downto 0);
     
-    signal ram  : ram_type;
+    signal ram  : ram_type := (others => (others => '0'));
     
     signal rd_p, rd_p_wr_sync   : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
     signal wr_p, wr_p_rd_sync   : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');

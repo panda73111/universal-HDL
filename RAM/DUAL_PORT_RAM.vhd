@@ -28,7 +28,7 @@ architecture Behavioral of DUAL_PORT_RAM is
         array (0 to DEPTH-1) of
         std_ulogic_vector(WIDTH-1 downto 0);
     
-    signal ram  : ram_type;
+    signal ram  : ram_type := (others => (others => '0'));
     
 begin
 
