@@ -56,6 +56,7 @@ package help_funcs is
     function "<="(v : std_ulogic_vector; u : unsigned) return boolean;
     function "<="(vl, vr : std_ulogic_vector) return boolean;
     function "&"(ul, ur : unsigned) return unsigned;
+    function "mod"(v : std_ulogic_vector; n : natural) return std_ulogic_vector;
     function int(v : std_ulogic_vector) return integer;
     function int(u : unsigned) return integer;
     function int(s : signed) return integer;
@@ -380,6 +381,16 @@ package body help_funcs is
     function "&"(ul, ur : unsigned) return std_ulogic_vector is
     begin
         return std_ulogic_vector(ul) & std_ulogic_vector(ur);
+    end function;
+    
+    
+    --------------
+    --- Modulo ---
+    --------------
+    
+    function "mod"(v : std_ulogic_vector; n : natural) return std_ulogic_vector is
+    begin
+        return stdulv(nat(v) mod n, v'length);
     end function;
     
     
