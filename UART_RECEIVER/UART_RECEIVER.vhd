@@ -108,7 +108,7 @@ begin
             RD_EN   => RD_EN,
             
             DOUT    => DOUT,
-            RD_ACK  => VALID,
+            VALID   => VALID,
             FULL    => FULL,
             EMPTY   => EMPTY
         );
