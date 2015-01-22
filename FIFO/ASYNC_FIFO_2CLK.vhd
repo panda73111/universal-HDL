@@ -5,9 +5,9 @@
 -- Module Name:    ASYNC_FIFO_2CLK - rtl 
 -- Project Name:   ASYNC_FIFO_2CLK
 -- Tool versions:  Xilinx ISE 14.7
--- Description: 
+-- Description:
 --
--- Additional Comments: 
+-- Additional Comments:
 --  reference: ftp://ftp.sigmet.com/outgoing/custom/vaisala/ProgrammingDocs/Verilog/CummingsSNUG2002SJ_FIFO1.pdf
 ----------------------------------------------------------------------------------
 library IEEE;
@@ -109,7 +109,7 @@ begin
         elsif rising_edge(WR_CLK) then
             WR_ACK  <= wr_p_inc;
             if wr_p_inc='1' then
-                ram(nat(wr_addr))  <= DIN;
+                ram(int(wr_addr))  <= DIN;
             end if;
             wr_p        <= wr_p_next;
             wr_p_bin    <= wr_p_bin_next;
@@ -127,7 +127,7 @@ begin
         elsif rising_edge(RD_CLK) then
             VALID       <= rd_p_inc;
             if rd_p_inc='1' then
-                DOUT    <= ram(nat(rd_addr));
+                DOUT    <= ram(int(rd_addr));
             end if;
             rd_p        <= rd_p_next;
             rd_p_bin    <= rd_p_bin_next;
