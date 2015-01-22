@@ -60,8 +60,6 @@ package help_funcs is
     function int(v : std_ulogic_vector) return integer;
     function int(u : unsigned) return integer;
     function int(s : signed) return integer;
-    function nat(v : std_ulogic_vector) return natural;
-    function nat(u : unsigned) return natural;
     function uns(v : std_ulogic_vector) return unsigned;
     function uns(n, l : natural) return unsigned;
     function sig(n : integer; l : natural) return signed;
@@ -390,7 +388,7 @@ package body help_funcs is
     
     function "mod"(v : std_ulogic_vector; n : natural) return std_ulogic_vector is
     begin
-        return stdulv(nat(v) mod n, v'length);
+        return stdulv(int(v) mod n, v'length);
     end function;
     
     
@@ -421,16 +419,6 @@ package body help_funcs is
     function uns(n, l : natural) return unsigned is
     begin
         return uns(stdulv(n, l));
-    end function;
-    
-    function nat(v : std_ulogic_vector) return natural is
-    begin
-        return to_integer(uns(v));
-    end function;
-    
-    function nat(u : unsigned) return natural is
-    begin
-        return to_integer(u);
     end function;
     
     function sig(n : integer; l : natural) return signed is
@@ -464,18 +452,8 @@ package body help_funcs is
     end function;
 
     function stdulv(c : character) return std_ulogic_vector is
-        variable ret  : std_ulogic_vector(7 downto 0);
-        variable tmp  : integer := character'pos(c);
     begin
-        for i in ret'reverse_range loop
-            if tmp mod 2 = 1 then
-                ret(i)  := '1';
-            else
-                ret(i)  := '0';
-            end if;
-            tmp := tmp / 2;
-        end loop;
-        return ret;
+        return stdulv(character'pos(c), 8);
     end function;
 
     function log2(val: natural) return natural is
