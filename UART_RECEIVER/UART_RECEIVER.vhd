@@ -28,12 +28,10 @@ entity UART_RECEIVER is
         RST : in std_ulogic;
         
         RXD     : in std_ulogic;
-        RD_EN   : in std_ulogic;
         
         DOUT    : out std_ulogic_vector(DATA_BITS-1 downto 0);
         VALID   : out std_ulogic := '0';
-        FULL    : out std_ulogic := '0';
-        EMPTY   : out std_ulogic := '0';
+        
         ERROR   : out std_ulogic := '0';
         BUSY    : out std_ulogic := '0'
     );
@@ -49,17 +47,16 @@ architecture rtl of UART_RECEIVER is
     constant cycle_ticks    : positive := integer(bit_period / CLK_IN_PERIOD);
     
     type state_type is (
-        WAIT_FOR_SENDER,
-        WAIT_FOR_START,
-        WAIT_FOR_DATA,
-        GET_DATA,
-        APPLY_DATA,
-        INCREMENT_BIT_INDEX,
-        GET_PARITY,
-        CHECK_PARITY,
-        WAIT_FOR_STOP,
-        CHECK_STOP,
-        PUSH_DATA
+        WAITING_FOR_SENDER,
+        WAITING_FOR_START,
+        WAITING_FOR_DATA,
+        GETTING_DATA,
+        APPLYING_DATA,
+        INCREMENTING_BIT_INDEX,
+        GETTING_PARITY,
+        CHECKING_PARITY,
+        WAITING_FOR_STOP,
+        CHECKING_STOP
     );
     
     type reg_type is record
@@ -67,19 +64,19 @@ architecture rtl of UART_RECEIVER is
         tick_cnt    : natural range 0 to cycle_ticks-1;
         receiving   : boolean;
         bit_index   : unsigned(2 downto 0);
-        fifo_din    : std_ulogic_vector(DATA_BITS-1 downto 0);
-        fifo_wr_en  : std_ulogic;
+        dout        : std_ulogic_vector(DATA_BITS-1 downto 0);
+        valid       : std_ulogic;
         parity      : std_ulogic;
         error       : std_ulogic;
     end record;
     
     constant reg_type_def : reg_type := (
-        state       => WAIT_FOR_SENDER,
+        state       => WAITING_FOR_SENDER,
         tick_cnt    => 0,
         receiving   => false,
         bit_index   => "000",
-        fifo_din    => (others => '0'),
-        fifo_wr_en  => '0',
+        dout        => (others => '0'),
+        valid       => '0',
         parity      => '0',
         error       => '0'
     );
@@ -89,29 +86,13 @@ architecture rtl of UART_RECEIVER is
     
 begin
     
+    DOUT    <= cur_reg.dout;
+    VALID   <= cur_reg.valid;
+    
     BUSY    <= '1' when cur_reg.receiving else '0';
     ERROR   <= cur_reg.error;
     
     cycle_half  <= cur_reg.tick_cnt=cycle_ticks/2-1;
-    
-    ASYNC_FIFO_inst : entity work.ASYNC_FIFO
-        generic map (
-            WIDTH   => DATA_BITS,
-            DEPTH   => BUFFER_SIZE
-        )
-        port map (
-            CLK => CLK,
-            RST => RST,
-            
-            DIN     => cur_reg.fifo_din,
-            WR_EN   => cur_reg.fifo_wr_en,
-            RD_EN   => RD_EN,
-            
-            DOUT    => DOUT,
-            VALID   => VALID,
-            FULL    => FULL,
-            EMPTY   => EMPTY
-        );
     
     stm_proc : process(cur_reg, RST, RXD, cycle_half)
         alias cr is cur_reg;
@@ -120,8 +101,8 @@ begin
         
         r   := cr;
         
-        r.fifo_wr_en    := '0';
-        r.tick_cnt      := cr.tick_cnt+1;
+        r.valid     := '0';
+        r.tick_cnt  := cr.tick_cnt+1;
         if
             not cr.receiving or
             cr.tick_cnt=cycle_ticks-1
@@ -131,78 +112,75 @@ begin
         
         case cr.state is
             
-            when WAIT_FOR_SENDER =>
+            when WAITING_FOR_SENDER =>
                 r.receiving := false;
                 r.bit_index := "000";
-                r.state := WAIT_FOR_START;
+                r.state := WAITING_FOR_START;
             
-            when WAIT_FOR_START =>
+            when WAITING_FOR_START =>
                 if RXD='0' then
-                    r.state := WAIT_FOR_DATA;
+                    r.state := WAITING_FOR_DATA;
                 end if;
             
-            when WAIT_FOR_DATA =>
+            when WAITING_FOR_DATA =>
                 r.receiving := true;
                 r.parity    := '1';
                 if PARITY_BIT_TYPE=ODD then
                     r.parity    := '0';
                 end if;
                 if cycle_half then
-                    r.state := GET_DATA;
+                    r.state := GETTING_DATA;
                 end if;
                 if RXD='1' then
                     -- invalid START bit
                     r.error := '1';
-                    r.state := WAIT_FOR_SENDER;
+                    r.state := WAITING_FOR_SENDER;
                 end if;
             
-            when GET_DATA =>
+            when GETTING_DATA =>
                 if cycle_half then
-                    r.state := APPLY_DATA;
+                    r.state := APPLYING_DATA;
                 end if;
             
-            when APPLY_DATA =>
-                r.fifo_din(int(cr.bit_index))   := RXD;
+            when APPLYING_DATA =>
+                r.dout(int(cr.bit_index))   := RXD;
                 if RXD='1' then
                     r.parity    := not cr.parity;
                 end if;
-                r.state := INCREMENT_BIT_INDEX;
+                r.state := INCREMENTING_BIT_INDEX;
             
-            when INCREMENT_BIT_INDEX =>
+            when INCREMENTING_BIT_INDEX =>
                 r.bit_index := cr.bit_index+1;
-                r.state     := GET_DATA;
+                r.state     := GETTING_DATA;
                 if cr.bit_index=DATA_BITS-1 then
-                    r.state := WAIT_FOR_STOP;
+                    r.state := WAITING_FOR_STOP;
                     if PARITY_BIT_TYPE/=NONE then
-                        r.state := GET_PARITY;
+                        r.state := GETTING_PARITY;
                     end if;
                 end if;
             
-            when GET_PARITY =>
+            when GETTING_PARITY =>
                 if cycle_half then
-                    r.state :=  CHECK_PARITY;
+                    r.state :=  CHECKING_PARITY;
                 end if;
             
-            when CHECK_PARITY =>
+            when CHECKING_PARITY =>
                 if (cr.parity xor RXD)='0' then
                     r.error := '1';
                 end if;
-                r.state := WAIT_FOR_STOP;
+                r.state := WAITING_FOR_STOP;
             
-            when WAIT_FOR_STOP =>
+            when WAITING_FOR_STOP =>
                 if cycle_half then
-                    r.state := CHECK_STOP;
+                    r.state := CHECKING_STOP;
                 end if;
             
-            when CHECK_STOP =>
+            when CHECKING_STOP =>
                 if RXD='0' then
                     r.error := '1';
                 end if;
-                r.state := PUSH_DATA;
-            
-            when PUSH_DATA =>
-                r.fifo_wr_en    := '1';
-                r.state         := WAIT_FOR_SENDER;
+                r.valid := '1';
+                r.state := WAITING_FOR_SENDER;
             
         end case;
         

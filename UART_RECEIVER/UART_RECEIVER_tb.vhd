@@ -26,30 +26,30 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     type douts_type is array(0 to 1) of std_ulogic_vector(7 downto 0);
     
     -- Inputs
-    signal clk      : std_ulogic := '0';
-    signal rst      : std_ulogic := '0';
-    signal rxd      : std_ulogic_vector(1 downto 0) := "00";
-    signal rd_en    : std_ulogic_vector(1 downto 0) := "00";
+    signal CLK  : std_ulogic := '0';
+    signal RST  : std_ulogic := '0';
+    
+    signal RXD      : std_ulogic_vector(1 downto 0) := "00";
     
     -- Outputs
-    signal dout     : douts_type;
-    signal valid    : std_ulogic_vector(1 downto 0);
-    signal full     : std_ulogic_vector(1 downto 0);
-    signal error    : std_ulogic_vector(1 downto 0);
-    signal busy     : std_ulogic_vector(1 downto 0);
+    signal DOUT     : douts_type;
+    signal VALID    : std_ulogic_vector(1 downto 0);
+    
+    signal ERROR    : std_ulogic_vector(1 downto 0);
+    signal BUSY     : std_ulogic_vector(1 downto 0);
     
     -- clock period definitions
-    constant clk_period         : time := 10 ns;
-    constant clk_period_real    : real := real(clk_period / 1 ps) / real(1 ns / 1 ps);
+    constant CLK_PERIOD         : time := 100 ns;
+    constant CLK_PERIOD_REAL    : real := real(clk_period / 1 ps) / real(1 ns / 1 ps);
     
     type baud_rates_type is array(0 to 1) of natural;
-    constant baud_rates : baud_rates_type := (115200, 9600);
+    constant BAUD_RATES : baud_rates_type := (115200, 9600);
     
     constant NONE   : natural := 0;
     constant EVEN   : natural := 1;
     constant ODD    : natural := 2;
     type parity_bit_types_type is array(0 to 1) of natural range 0 to 2;
-    constant parity_bit_types   : parity_bit_types_type := (1, 2);
+    constant PARITY_BIT_TYPES   : parity_bit_types_type := (1, 2);
     
     signal tests_finished   : std_ulogic_vector(1 downto 0) := "00";
     
@@ -59,73 +59,72 @@ BEGIN
         
         UART_RECEIVERs_inst : entity work.UART_RECEIVER
         generic map (
-            CLK_IN_PERIOD   => clk_period_real,
-            BAUD_RATE       => baud_rates(i),
-            PARITY_BIT_TYPE => parity_bit_types(i)
+            CLK_IN_PERIOD   => CLK_PERIOD_REAL,
+            BAUD_RATE       => BAUD_RATES(i),
+            PARITY_BIT_TYPE => PARITY_BIT_TYPES(i)
         )
         port map (
-            CLK => clk,
-            RST => rst,
+            CLK => CLK,
+            RST => RST,
             
-            RXD     => rxd(i),
-            RD_EN   => rd_en(i),
+            RXD     => RXD(I),
             
-            DOUT    => dout(i),
-            VALID   => valid(i),
-            FULL    => full(i),
-            ERROR   => error(i),
-            BUSY    => busy(i)
+            DOUT    => DOUT(I),
+            VALID   => VALID(I),
+            
+            ERROR   => ERROR(I),
+            BUSY    => BUSY(I)
         );
         
     end generate;
     
     -- clock generation
-    clk <= not clk after clk_period / 2;
+    CLK <= not CLK after CLK_PERIOD / 2;
     
     stimulus_procs_gen : for i in 0 to 1 generate
         
         stimulate_uart_proc : process
-            constant bit_period : real := 1_000_000_000.0 / real(baud_rates(i));
-            constant bit_time   : time := bit_period * 1 ns;
-            alias par_t is parity_bit_types(i);
+            constant BIT_PERIOD : real := 1_000_000_000.0 / real(BAUD_RATES(i));
+            constant BIT_TIME   : time := bit_period * 1 ns;
+            alias par_t is PARITY_BIT_TYPES(i);
             variable data   : std_ulogic_vector(7 downto 0);
             variable parity : std_ulogic;
         begin
             wait for 200 ns;
-            wait for clk_period*10;
-            wait until rising_edge(clk);
+            wait for CLK_PERIOD*10;
+            wait until rising_edge(CLK);
             
-            rxd(i)  <= '1';
-            wait until rising_edge(clk);
+            RXD(i)  <= '1';
+            wait until rising_edge(CLK);
             
             for j in character'pos('a') to character'pos('z') loop
                 -- start bit
-                rxd(i)  <= '0';
-                wait for bit_time;
+                RXD(i)  <= '0';
+                wait for BIT_TIME;
                 -- data bits
                 data    := stdulv(j, 8);
                 parity  := '0';
                 for k in 0 to 7 loop
-                    rxd(i)  <= data(k);
+                    RXD(i)  <= data(k);
                     if data(k)='1' then
                         parity  := not parity;
                     end if;
-                    wait for bit_time;
+                    wait for BIT_TIME;
                 end loop;
                 -- parity bit
                 if par_t=EVEN then
-                    rxd(i)  <= parity;
-                    wait for bit_time;
+                    RXD(i)  <= parity;
+                    wait for BIT_TIME;
                 elsif par_t=ODD then
-                    rxd(i)  <= not parity;
-                    wait for bit_time;
+                    RXD(i)  <= not parity;
+                    wait for BIT_TIME;
                 end if;
                 -- stop bit
-                rxd(i)  <= '1';
-                wait for bit_time;
+                RXD(i)  <= '1';
+                wait for BIT_TIME;
             end loop;
             
-            wait for bit_time;
+            wait for BIT_TIME;
             tests_finished(i)   <= '1';
             wait;
         end process;
@@ -139,14 +138,15 @@ BEGIN
         rst <= '1';
         wait for 100 ns;
         rst <= '0';
-        wait for clk_period*10;
-        wait until rising_edge(clk);
+        wait for CLK_PERIOD*10;
+        wait until rising_edge(CLK);
         
         -- insert stimulus here
         
-        wait until tests_finished="11" and busy="00";
+        wait until tests_finished="11" and BUSY="00";
         wait for 10 us;
-        report "NONE. All tests completed." severity failure;
+        report "NONE. All tests completed."
+            severity FAILURE;
     end process;
 
 END;
