@@ -60,6 +60,7 @@ package help_funcs is
     function int(v : std_ulogic_vector) return integer;
     function int(u : unsigned) return integer;
     function int(s : signed) return integer;
+    function int(c : character) return integer;
     function uns(v : std_ulogic_vector) return unsigned;
     function uns(n, l : natural) return unsigned;
     function sig(n : integer; l : natural) return signed;
@@ -409,6 +410,11 @@ package body help_funcs is
     function int(s : signed) return integer is
     begin
         return to_integer(s);
+    end function;
+    
+    function int(c : character) return integer is
+    begin
+        return character'pos(c);
     end function;
     
     function uns(v : std_ulogic_vector) return unsigned is
