@@ -81,6 +81,7 @@ architecture rtl of UART_RECEIVER is
         error       => '0'
     );
     
+    signal rxd_sync             : std_ulogic := '0';
     signal cycle_half           : boolean := false;
     signal cur_reg, next_reg    : reg_type := reg_type_def;
     
@@ -94,7 +95,17 @@ begin
     
     cycle_half  <= cur_reg.tick_cnt=cycle_ticks/2-1;
     
-    stm_proc : process(cur_reg, RST, RXD, cycle_half)
+    rxd_SIGNAL_SYNC_inst : entity work.SIGNAL_SYNC
+        generic map (
+            DEFAULT_VALUE   => '1'
+        )
+        port map (
+            CLK     => CLK,
+            DIN     => RXD,
+            DOUT    => rxd_sync
+        );
+    
+    stm_proc : process(cur_reg, RST, rxd_sync, cycle_half)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -118,7 +129,7 @@ begin
                 r.state := WAITING_FOR_START;
             
             when WAITING_FOR_START =>
-                if RXD='0' then
+                if rxd_sync='0' then
                     r.state := WAITING_FOR_DATA;
                 end if;
             
@@ -131,7 +142,7 @@ begin
                 if cycle_half then
                     r.state := GETTING_DATA;
                 end if;
-                if RXD='1' then
+                if rxd_sync='1' then
                     -- invalid START bit
                     r.error := '1';
                     r.state := WAITING_FOR_SENDER;
@@ -143,8 +154,8 @@ begin
                 end if;
             
             when APPLYING_DATA =>
-                r.dout(int(cr.bit_index))   := RXD;
-                if RXD='1' then
+                r.dout(int(cr.bit_index))   := rxd_sync;
+                if rxd_sync='1' then
                     r.parity    := not cr.parity;
                 end if;
                 r.state := INCREMENTING_BIT_INDEX;
@@ -165,7 +176,7 @@ begin
                 end if;
             
             when CHECKING_PARITY =>
-                if (cr.parity xor RXD)='0' then
+                if (cr.parity xor rxd_sync)='0' then
                     r.error := '1';
                 end if;
                 r.state := WAITING_FOR_STOP;
@@ -176,7 +187,7 @@ begin
                 end if;
             
             when CHECKING_STOP =>
-                if RXD='0' then
+                if rxd_sync='0' then
                     r.error := '1';
                 end if;
                 r.valid := '1';

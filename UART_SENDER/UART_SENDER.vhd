@@ -81,6 +81,8 @@ architecture rtl of UART_SENDER is
         parity      => '0'
     );
     
+    signal cts_sync : std_ulogic := '0';
+    
     signal fifo_rd_en   : std_ulogic := '0';
     signal fifo_dout    : std_ulogic_vector(DATA_BITS-1 downto 0) := (others => '0');
     signal fifo_empty   : std_ulogic := '0';
@@ -96,6 +98,13 @@ begin
     
     cycle_end   <= cur_reg.tick_cnt=cycle_ticks-2;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
+    
+    cts_SIGNAL_SYNC_inst : entity work.SIGNAL_SYNC
+        port map (
+            CLK     => CLK,
+            DIN     => CTS,
+            DOUT    => cts_sync
+        );
     
     ASYNC_FIFO_inst : entity work.ASYNC_FIFO
         generic map (
@@ -115,7 +124,7 @@ begin
             EMPTY   => fifo_empty
         );
     
-    stm_proc : process(cur_reg, RST, fifo_dout, fifo_empty, cycle_end, CTS)
+    stm_proc : process(cur_reg, RST, fifo_dout, fifo_empty, cycle_end, cts_sync)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -141,7 +150,7 @@ begin
                 end if;
             
             when WAIT_FOR_RECEIVER =>
-                if CTS='1' then
+                if cts_sync='1' then
                     r.state := SEND_START_BIT;
                 end if;
             
