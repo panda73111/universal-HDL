@@ -53,7 +53,7 @@ architecture behavioral of test_spi_flash is
             assert not VERBOSE
                 report "Opening file: " & INIT_FILE_PATH
                 severity NOTE;
-            addr    := nat(INIT_ADDR);
+            addr    := int(INIT_ADDR);
             file_open(f, INIT_FILE_PATH, read_mode);
             while not endfile(f) loop
                 readline(f, l);
@@ -140,13 +140,13 @@ begin
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(C) or SN='1';
                 if SN='1' then exit bit_loop; end if;
-                MOSI    <= flash_mem(nat(flash_addr))(i);
+                MOSI    <= flash_mem(int(flash_addr))(i);
                 wait until rising_edge(C) or SN='1';
                 if SN='1' then exit bit_loop; end if;
             end loop;
             if SN='0' then
                 wait until falling_edge(C) or SN='1';
-                MOSI    <= flash_mem(nat(flash_addr))(0);
+                MOSI    <= flash_mem(int(flash_addr))(0);
             end if;
         end procedure;
     begin
@@ -232,7 +232,7 @@ begin
                         if flash_status(0)='0' then
                             while SN='0' loop
                                 assert not VERBOSE
-                                    report "Reading byte: 0x" & hstr(flash_mem(nat(flash_addr))) & " at 0x" & hstr(flash_addr, false)
+                                    report "Reading byte: 0x" & hstr(flash_mem(int(flash_addr))) & " at 0x" & hstr(flash_addr, false)
                                     severity NOTE;
                                 send_data_byte;
                                 flash_addr  := (flash_addr+1) mod BYTE_COUNT;
@@ -279,7 +279,7 @@ begin
                                 assert not VERBOSE
                                     report "Writing byte: 0x" & hstr(flash_data_byte) & " at 0x" & hstr(flash_addr, false)
                                     severity NOTE;
-                                flash_mem(nat(flash_addr))  <= flash_data_byte;
+                                flash_mem(int(flash_addr))  <= flash_data_byte;
                                 flash_addr(15 downto 0)     := (flash_addr(15 downto 0)+1) mod BYTE_COUNT;
                             end if;
                             wait until rising_edge(C) or SN='1';
