@@ -33,12 +33,16 @@ entity ASYNC_FIFO is
         FULL    : out std_ulogic := '0';
         EMPTY   : out std_ulogic := '0';
         WR_ACK  : out std_ulogic := '0'; -- write was successful
-        VALID   : out std_ulogic := '0'  -- read was successful
+        VALID   : out std_ulogic := '0'; -- read was successful
+        COUNT   : out std_ulogic_vector(log2(DEPTH)-1 downto 0) := (others => '0')
     ); 
 end ASYNC_FIFO;
 
 architecture rtl of ASYNC_FIFO is
+    signal counter  : unsigned(COUNT'range) := (others => '0');
 begin
+    
+    COUNT   <= stdulv(counter);
     
     ASYNC_FIFO_2CLK_inst : entity work.ASYNC_FIFO_2CLK
         generic map (
@@ -60,6 +64,19 @@ begin
             WR_ACK  => WR_ACK,
             VALID   => VALID
         );
+    
+    count_proc : process(CLK, RST)
+    begin
+        if RST='1' then
+            counter <= (others => '0');
+        elsif rising_edge(CLK) then
+            if RD_EN='0' and WR_EN='1' and FULL='0' then
+                counter <= counter+1;
+            elsif RD_EN='1' and WR_EN='0' and EMPTY='0' then
+                counter <= counter-1;
+            end if;
+        end if;
+    end process;
     
 end rtl;
 
