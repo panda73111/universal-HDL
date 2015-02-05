@@ -100,19 +100,30 @@ architecture rtl of RUDP_LAYER is
         WAITING_FOR_DATA
     );
     
+    type packets_flag_type is
+        array(0 to BUFFERED_PACKETS) of
+        boolean;
+    
     type recv_reg_type is record
         state               : recv_state_type;
         recv_buf_wr_addr    : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
         recv_buf_rd_addr    : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
         recv_buf_rd_en      : std_ulogic;
+        rst_checksum        : boolean;
+        packet_number       : unsigned(7 downto 0);
         next_packet_number  : unsigned(7 downto 0);
+        ack_packets         : packets_flag_type;
     end record;
     
     constant recv_reg_type_def  : recv_state_type := (
         state           => WAITING_FOR_DATA,
         recv_buf_wr_addr    => (others => '0'),
         recv_buf_rd_addr    => (others => '0'),
-        next_packet_number  => x"00"
+        recv_buf_rd_en      => '0',
+        rst_checksum        => true,
+        packet_number       => x"00",
+        next_packet_number  => x"00",
+        ack_packets         => (others => false)
     );
     
     signal cur_send_reg, next_send_reg  : send_reg_type := send_reg_type_def;
@@ -126,7 +137,8 @@ architecture rtl of RUDP_LAYER is
     signal recv_buf_dout    : std_ulogic_vector(7 downto 0) := x"00";
     signal recv_buf_valid   : std_ulogic := '0';
     
-    signal checksum : std_ulogic_vector(7 downto 0) := x"00";
+    signal send_checksum    : std_ulogic_vector(7 downto 0) := x"00";
+    signal recv_checksum    : std_ulogic_vector(7 downto 0) := x"00";
     
 begin
     
@@ -169,13 +181,24 @@ begin
             DOUT    => recv_buf_dout
         );
     
-    checksum_proc : process(cur_reg.rst_checksum, CLK)
+    send_checksum_proc : process(cur_send_reg.rst_checksum, CLK)
     begin
-        if cur_reg.rst_checksum then
-            checksum    <= x"00";
+        if cur_send_reg.rst_checksum then
+            recv_checksum   <= x"00";
         elsif rising_edge(CLK) then
             if cur_reg.packet_out_valid='1' then
-                checksum    <= checksum+cur_reg.packet_out;
+                send_checksum   <= checksum+cur_reg.packet_out;
+            end if;
+        end if;
+    end process;
+    
+    recv_checksum_proc : process(cur_recv_reg.rst_checksum, CLK)
+    begin
+        if cur_recv_reg.rst_checksum then
+            recv_checksum   <= x"00";
+        elsif rising_edge(CLK) then
+            if cur_reg.packet_out_valid='1' then
+                recv_checksum   <= checksum+cur_reg.packet_out;
             end if;
         end if;
     end process;
@@ -255,6 +278,7 @@ begin
         r   := cr;
         
         r.recv_buf_wr_en    := '0';
+        r.rst_checksum      := false;
         
         case cr.state is
             
@@ -273,10 +297,18 @@ begin
                 
             
             when CHECKING_ACK_PACKET_NUMBER =>
-                
+                r.packet_number := uns(PACKET_DIN);
+                r.state         := COMPARING_ACK_CHECKSUM;
             
             when CHECKING_RESEND_PACKET_NUMBER =>
                 
+            
+            when COMPARING_ACK_CHECKSUM =>
+                if checksum=PACKET_DIN then
+                    r.ack_packets(int(PACKET_DIN))  := true;
+                end if;
+                r.rst_checksum  := true;
+                r.state         := WAITING_FOR_DATA;
             
         end case;
         
