@@ -40,7 +40,7 @@ use work.help_funcs.all;
 
 entity RUDP_LAYER is
     generic (
-        TIMEOUT_CYCLES      : positive := 1024;
+        TIMEOUT_CYCLES      : positive := 50000; -- 1 ms
         BUFFERED_PACKETS    : positive := 8
     );
     port (
@@ -70,75 +70,131 @@ architecture rtl of RUDP_LAYER is
     constant ACK_MAGIC      : std_ulogic_vector(7 downto 0) := x"66";
     constant RESEND_MAGIC   : std_ulogic_vector(7 downto 0) := x"67";
     
+    --- sending ---
+    
     type send_state_type is (
         WAITING_FOR_DATA
     );
     
     type send_reg_type is record
-        state               : send_state_type;
-        packet_out          : std_ulogic_vector(7 downto 0);
-        packet_out_valid    : std_ulogic;
-        send_buf_wr_addr    : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
-        send_buf_rd_addr    : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
-        rst_checksum        : boolean;
-        next_packet_number  : unsigned(7 downto 0);
-        timeout             : unsigned(10 downto 0);
+        state                   : send_state_type;
+        packet_out              : std_ulogic_vector(7 downto 0);
+        packet_out_valid        : std_ulogic;
+        send_buf_wr_addr        : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
+        send_buf_rd_addr        : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
+        rst_checksum            : boolean;
+        next_packet_number      : unsigned(7 downto 0);
+        packet_records_p        : natural range 0 to BUFFERED_PACKETS;
+        packet_records_wr_en    : boolean;
+        timeout_ack             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
     end record;
     
     constant send_reg_type_def   : send_reg_type := (
-        state               => WAITING_FOR_DATA,
-        packet_out          => x"00",
-        packet_out_valid    => '0',
-        send_buf_wr_addr    => (others => '0'),
-        send_buf_rd_addr    => (others => '0'),
-        rst_checksum        => true,
-        next_packet_number  => x"00",
-        timeout             => (others => '0')
-    );
-    
-    type recv_state_type is (
-        WAITING_FOR_DATA
-    );
-    
-    type packets_flag_type is
-        array(0 to BUFFERED_PACKETS) of
-        boolean;
-    
-    type recv_reg_type is record
-        state               : recv_state_type;
-        recv_buf_wr_addr    : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
-        recv_buf_rd_addr    : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
-        recv_buf_rd_en      : std_ulogic;
-        rst_checksum        : boolean;
-        packet_number       : unsigned(7 downto 0);
-        next_packet_number  : unsigned(7 downto 0);
-        ack_packets         : packets_flag_type;
-    end record;
-    
-    constant recv_reg_type_def  : recv_state_type := (
-        state           => WAITING_FOR_DATA,
-        recv_buf_wr_addr    => (others => '0'),
-        recv_buf_rd_addr    => (others => '0'),
-        recv_buf_rd_en      => '0',
-        rst_checksum        => true,
-        packet_number       => x"00",
-        next_packet_number  => x"00",
-        ack_packets         => (others => false)
+        state                   => WAITING_FOR_DATA,
+        packet_out              => x"00",
+        packet_out_valid        => '0',
+        send_buf_wr_addr        => (others => '0'),
+        send_buf_rd_addr        => (others => '0'),
+        rst_checksum            => true,
+        next_packet_number      => x"00",
+        packet_records_p        => 0,
+        packet_records_wr_en    => false,
+        timeout_ack             => (others => '0')
     );
     
     signal cur_send_reg, next_send_reg  : send_reg_type := send_reg_type_def;
-    signal cur_recv_reg, next_recv_reg  : recv_reg_type := recv_reg_type_def;
     
     signal send_buf_dout    : std_ulogic_vector(7 downto 0) := x"00";
     signal send_buf_valid   : std_ulogic := '0';
     signal send_buf_valid   : std_ulogic := '0';
     signal send_buf_count   : std_ulogic_vector(7 downto 0) := x"00";
     
+    signal send_checksum    : std_ulogic_vector(7 downto 0) := x"00";
+    
+    --- receiving ---
+    
+    type recv_state_type is (
+        WAITING_FOR_DATA
+    );
+    
+    type recv_reg_type is record
+        state                   : recv_state_type;
+        recv_buf_wr_addr        : std_ulogic_vector(7 downto 0);
+        recv_buf_rd_addr        : std_ulogic_vector(7 downto 0);
+        recv_buf_rd_en          : std_ulogic;
+        rst_checksum            : boolean;
+        packet_number           : unsigned(7 downto 0);
+        next_packet_number      : unsigned(7 downto 0);
+        packet_records_p        : natural range 0 to BUFFERED_PACKETS;
+        packet_records_wr_en    : boolean;
+    end record;
+    
+    constant recv_reg_type_def  : recv_state_type := (
+        state                   => WAITING_FOR_DATA,
+        recv_buf_wr_addr        => x"00",
+        recv_buf_rd_addr        => x"00",
+        recv_buf_rd_en          => '0',
+        rst_checksum            => true,
+        packet_number           => x"00",
+        next_packet_number      => x"00",
+        packet_records_p        => 0,
+        packet_records_wr_en    => false
+    );
+    
+    signal cur_recv_reg, next_recv_reg  : recv_reg_type := recv_reg_type_def;
+    
     signal recv_buf_dout    : std_ulogic_vector(7 downto 0) := x"00";
     signal recv_buf_valid   : std_ulogic := '0';
     
-    signal send_checksum    : std_ulogic_vector(7 downto 0) := x"00";
     signal recv_checksum    : std_ulogic_vector(7 downto 0) := x"00";
+    
+    --- packet records, accessed by both state machines ---
+    
+    type packet_record_type is record
+        is_buffered : boolean;
+        buf_p       : std_ulogic_vector(log2(BUFFERED_PACKETS)-1 downto 0);
+    end record;
+    
+    type packet_records_type is
+        array(0 to BUFFERED_PACKETS-1) of
+        packet_record_type;
+    
+    constant packet_records_type_def    : packet_records_type := (
+        others => (
+            is_buffered => false,
+            buf_p       => (others => '0')
+        )
+    );
+    
+    signal packet_records   : packet_records_type := packet_records_type_def;
+    
+    --- timeout records ---
+    
+    type timeout_record_type is record
+        is_active       : boolean;
+        timeout         : unsigned(log2(TIMEOUT_CYCLES) downto 0);
+        send_buf_addr   : std_ulogic_vector(log2(BUFFERED_PACKETS)+2 downto 0);
+    end record;
+    
+    type timeout_records_type is
+        array(0 to BUFFERED_PACKETS-1) of
+        timeout_record_type;
+    
+    constant timeout_def    :
+        unsigned(log2(TIMEOUT_CYCLES) downto 0) :=
+        uns(TIMEOUT_CYCLES-1, timeout_record_type.buf_p'length);
+    
+    constant timeout_records_type_def   : timeout_records_type := (
+        others => (
+            is_active       => false,
+            timeout         => TIMEOUT_DEF,
+            send_buf_addr   => (others => '0')
+        )
+    );
+    
+    signal timeout_records  : timeout_records_type := timeout_records_type_def;
+    
+    signal pending_timeouts : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
 begin
     
@@ -167,7 +223,7 @@ begin
     receive_buf_DUAL_PORT_RAM_inst : entity work.DUAL_PORT_RAM
         generic map (
             WIDTH   => 8,
-            DEPTH   => BUFFERED_PACKETS*256
+            DEPTH   => 256
         )
         port map (
             CLK => CLK,
@@ -200,6 +256,33 @@ begin
             if cur_reg.packet_out_valid='1' then
                 recv_checksum   <= checksum+cur_reg.packet_out;
             end if;
+        end if;
+    end process;
+    
+    timeout_proc : process(RST, CLK)
+        constant timeout_high   : natural := timeout_records_type.timeout'high;
+    begin
+        if RST='1' then
+            timeout_records     <= timeout_records_type_def;
+            pending_timeouts    <= (others => '0');
+        elsif rising_edge(CLK) then
+            for i in 0 to BUFFERED_PACKETS-1 loop
+                if timeout_records(i).is_active then
+                    -- waiting for acknowledge of packet at send buffer position [i]
+                    timeout_records(i).timeout  <= timeout_records(i).timeout-1;
+                    if timeout_records(i).timeout(timeout_high)='1' then
+                        -- packet at send buffer position [i] timed out
+                        pending_timeouts(i)             <= '1';
+                        timeout_records(i).timeout      <= timeout_def;
+                        timeout_records(i).is_active    <= false;
+                    end if;
+                end if;
+                
+                if cur_send_reg.timeout_ack(i)='1' then
+                    -- packet of which the acknowledge timed out was resent
+                    pending_timeouts(i) <= '0';
+                end if;
+            end loop;
         end if;
     end process;
     
