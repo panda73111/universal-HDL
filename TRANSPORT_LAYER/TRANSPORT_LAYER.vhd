@@ -38,7 +38,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.help_funcs.all;
 
-entity RUDP_LAYER is
+entity TRANSPORT_LAYER is
     generic (
         TIMEOUT_CYCLES      : positive := 50000; -- 1 ms
         BUFFERED_PACKETS    : positive := 8
@@ -62,9 +62,9 @@ entity RUDP_LAYER is
         
         BUSY    : out std_ulogic := '0'
     );
-end RUDP_LAYER;
+end TRANSPORT_LAYER;
 
-architecture rtl of RUDP_LAYER is
+architecture rtl of TRANSPORT_LAYER is
     
     constant DATA_MAGIC     : std_ulogic_vector(7 downto 0) := x"65";
     constant ACK_MAGIC      : std_ulogic_vector(7 downto 0) := x"66";
