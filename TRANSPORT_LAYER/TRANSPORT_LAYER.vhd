@@ -70,88 +70,6 @@ architecture rtl of TRANSPORT_LAYER is
     constant ACK_MAGIC      : std_ulogic_vector(7 downto 0) := x"66";
     constant RESEND_MAGIC   : std_ulogic_vector(7 downto 0) := x"67";
     
-    --- sending ---
-    
-    type send_state_type is (
-        WAITING_FOR_DATA
-    );
-    
-    type send_reg_type is record
-        state                   : send_state_type;
-        packet_out              : std_ulogic_vector(7 downto 0);
-        packet_out_valid        : std_ulogic;
-        send_buf_wr_addr        : std_ulogic_vector(log2(BUFFERED_PACKETS)+7 downto 0);
-        send_buf_rd_addr        : std_ulogic_vector(log2(BUFFERED_PACKETS)+7 downto 0);
-        packet_length           : unsigned(7 downto 0);
-        packet_index            : unsigned(log2(BUFFERED_PACKETS)-1 downto 0);
-        bytes_left_counter      : unsigned(8 downto 0);
-        next_packet_number      : unsigned(7 downto 0);
-        packet_records_p        : natural range 0 to BUFFERED_PACKETS;
-        packet_records_wr_en    : boolean;
-        timeout_ack             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        timeout_start           : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        checksum                : std_ulogic_vector(7 downto 0);
-    end record;
-    
-    constant send_reg_type_def   : send_reg_type := (
-        state                   => WAITING_FOR_DATA,
-        packet_out              => x"00",
-        packet_out_valid        => '0',
-        send_buf_wr_addr        => (others => '0'),
-        send_buf_rd_addr        => (others => '0'),
-        packet_length           => x"00",
-        packet_index            => (others => '0'),
-        bytes_left_counter      => (others => '0'),
-        next_packet_number      => x"00",
-        packet_records_p        => 0,
-        packet_records_wr_en    => false,
-        timeout_ack             => (others => '0'),
-        timeout_start           => (others => '0'),
-        checksum                => x"00"
-    );
-    
-    signal cur_send_reg, next_send_reg  : send_reg_type := send_reg_type_def;
-    
-    signal send_buf_dout    : std_ulogic_vector(7 downto 0) := x"00";
-    signal send_buf_valid   : std_ulogic := '0';
-    signal send_buf_valid   : std_ulogic := '0';
-    signal send_buf_count   : std_ulogic_vector(7 downto 0) := x"00";
-    
-    --- receiving ---
-    
-    type recv_state_type is (
-        WAITING_FOR_DATA
-    );
-    
-    type recv_reg_type is record
-        state                   : recv_state_type;
-        recv_buf_wr_addr        : std_ulogic_vector(7 downto 0);
-        recv_buf_rd_addr        : std_ulogic_vector(7 downto 0);
-        recv_buf_rd_en          : std_ulogic;
-        packet_number           : unsigned(7 downto 0);
-        next_packet_number      : unsigned(7 downto 0);
-        packet_records_p        : natural range 0 to BUFFERED_PACKETS;
-        packet_records_wr_en    : boolean;
-        checksum                : std_ulogic_vector(7 downto 0);
-    end record;
-    
-    constant recv_reg_type_def  : recv_state_type := (
-        state                   => WAITING_FOR_DATA,
-        recv_buf_wr_addr        => x"00",
-        recv_buf_rd_addr        => x"00",
-        recv_buf_rd_en          => '0',
-        packet_number           => x"00",
-        next_packet_number      => x"00",
-        packet_records_p        => 0,
-        packet_records_wr_en    => false,
-        checksum                => x"00"
-    );
-    
-    signal cur_recv_reg, next_recv_reg  : recv_reg_type := recv_reg_type_def;
-    
-    signal recv_buf_dout    : std_ulogic_vector(7 downto 0) := x"00";
-    signal recv_buf_valid   : std_ulogic := '0';
-    
     --- packet records, accessed by both state machines ---
     
     type packet_record_type is record
@@ -159,18 +77,22 @@ architecture rtl of TRANSPORT_LAYER is
         buf_p       : std_ulogic_vector(log2(BUFFERED_PACKETS)-1 downto 0);
     end record;
     
+    constant packet_record_type_def : packet_record_type := (
+        is_buffered => false,
+        buf_p       => (others => '0')
+    );
+    
     type packet_records_type is
-        array(0 to BUFFERED_PACKETS-1) of
+        array(0 to 255) of
         packet_record_type;
     
     constant packet_records_type_def    : packet_records_type := (
-        others => (
-            is_buffered => false,
-            buf_p       => (others => '0')
-        )
+        others => packet_record_type_def
     );
     
-    signal packet_records   : packet_records_type := packet_records_type_def;
+    signal packet_records       : packet_records_type := packet_records_type_def;
+    signal send_records_dout    : packet_record_type := packet_record_type_def;
+    signal recv_records_dout    : packet_record_type := packet_record_type_def;
     
     --- timeout records ---
     
@@ -199,6 +121,96 @@ architecture rtl of TRANSPORT_LAYER is
     signal timeout_records  : timeout_records_type := timeout_records_type_def;
     
     signal pending_timeouts : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    
+    --- sending ---
+    
+    type send_state_type is (
+        WAITING_FOR_DATA
+    );
+    
+    type send_reg_type is record
+        state                   : send_state_type;
+        packet_out              : std_ulogic_vector(7 downto 0);
+        packet_out_valid        : std_ulogic;
+        send_buf_wr_addr        : std_ulogic_vector(log2(BUFFERED_PACKETS)+7 downto 0);
+        send_buf_rd_addr        : std_ulogic_vector(log2(BUFFERED_PACKETS)+7 downto 0);
+        packet_length           : unsigned(7 downto 0);
+        packet_index            : unsigned(log2(BUFFERED_PACKETS)-1 downto 0);
+        bytes_left_counter      : unsigned(8 downto 0);
+        next_packet_number      : unsigned(7 downto 0);
+        packet_records_p        : natural range 0 to BUFFERED_PACKETS;
+        packet_records_wr_en    : boolean;
+        timeout_ack             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        timeout_start           : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        checksum                : std_ulogic_vector(7 downto 0);
+        records_index           : unsigned(7 downto 0);
+        records_din             : packet_record_type;
+        records_wr_en           : std_ulogic;
+    end record;
+    
+    constant send_reg_type_def   : send_reg_type := (
+        state                   => WAITING_FOR_DATA,
+        packet_out              => x"00",
+        packet_out_valid        => '0',
+        send_buf_wr_addr        => (others => '0'),
+        send_buf_rd_addr        => (others => '0'),
+        packet_length           => x"00",
+        packet_index            => (others => '0'),
+        bytes_left_counter      => (others => '0'),
+        next_packet_number      => x"00",
+        packet_records_p        => 0,
+        packet_records_wr_en    => false,
+        timeout_ack             => (others => '0'),
+        timeout_start           => (others => '0'),
+        checksum                => x"00",
+        records_index           => x"00",
+        records_din             => packet_record_type_def,
+        records_wr_en           => '0'
+    );
+    
+    signal cur_send_reg, next_send_reg  : send_reg_type := send_reg_type_def;
+    
+    signal send_buf_dout    : std_ulogic_vector(7 downto 0) := x"00";
+    
+    --- receiving ---
+    
+    type recv_state_type is (
+        WAITING_FOR_DATA
+    );
+    
+    type recv_reg_type is record
+        state                   : recv_state_type;
+        recv_buf_wr_addr        : std_ulogic_vector(7 downto 0);
+        recv_buf_rd_addr        : std_ulogic_vector(7 downto 0);
+        recv_buf_rd_en          : std_ulogic;
+        packet_number           : unsigned(7 downto 0);
+        next_packet_number      : unsigned(7 downto 0);
+        packet_records_p        : natural range 0 to BUFFERED_PACKETS;
+        packet_records_wr_en    : boolean;
+        checksum                : std_ulogic_vector(7 downto 0);
+        records_index           : unsigned(7 downto 0);
+        records_din             : packet_record_type;
+        records_wr_en           : std_ulogic;
+    end record;
+    
+    constant recv_reg_type_def  : recv_state_type := (
+        state                   => WAITING_FOR_DATA,
+        recv_buf_wr_addr        => x"00",
+        recv_buf_rd_addr        => x"00",
+        recv_buf_rd_en          => '0',
+        packet_number           => x"00",
+        next_packet_number      => x"00",
+        packet_records_p        => 0,
+        packet_records_wr_en    => false,
+        checksum                => x"00",
+        records_index           => x"00",
+        records_din             => packet_record_type_def,
+        records_wr_en           => '0'
+    );
+    
+    signal cur_recv_reg, next_recv_reg  : recv_reg_type := recv_reg_type_def;
+    
+    signal recv_buf_dout    : std_ulogic_vector(7 downto 0) := x"00";
     
 begin
     
@@ -240,6 +252,24 @@ begin
             
             DOUT    => recv_buf_dout
         );
+    
+    packet_records_proc : process(RST, CLK)
+    begin
+        if RST='1' then
+            packet_records  <= packet_records_type_def;
+        elsif rising_edge(CLK) then
+            send_records_dout   <= packet_records(int(cur_send_reg.records_index));
+            recv_records_dout   <= packet_records(int(cur_recv_reg.records_index));
+            
+            if cur_send_reg.records_wr_en='1' then
+                packet_records(int(cur_send_reg.records_index)) <= cur_send_reg.records_din;
+            end if;
+            
+            if cur_recv_reg.records_wr_en='1' then
+                packet_records(int(cur_send_reg.records_index)) <= cur_recv_reg.records_din;
+            end if;
+        end if;
+    end process;
     
     timeout_proc : process(RST, CLK)
         constant timeout_high   : natural := timeout_records_type.timeout'high;
