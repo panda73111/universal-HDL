@@ -76,13 +76,17 @@ architecture rtl of TRANSPORT_LAYER is
     --- packet records, accessed by both state machines ---
     
     type packet_record_type is record
-        is_buffered : boolean;
-        buf_index   : std_ulogic_vector(BUF_INDEX_BITS-1 downto 0);
+        is_buffered     : boolean;
+        was_received    : boolean;
+        was_sent        : boolean;
+        buf_index       : std_ulogic_vector(BUF_INDEX_BITS-1 downto 0);
     end record;
     
     constant packet_record_type_def : packet_record_type := (
-        is_buffered => false,
-        buf_index   => (others => '0')
+        is_buffered     => false,
+        was_received    => false,
+        was_sent        => false,
+        buf_index       => (others => '0')
     );
     
     type packet_records_type is
