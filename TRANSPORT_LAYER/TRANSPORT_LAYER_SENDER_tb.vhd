@@ -84,6 +84,37 @@ BEGIN
     
     -- Stimulus process
     stim_proc: process
+        
+        procedure send_packet(pkt_i : in natural) is
+        begin
+            for byte_i in 0 to 127 loop
+                DIN         <= stdulv(pkt_i mod 8, 3) & stdulv(byte_i mod 32, 5);
+                DIN_WR_EN   <= '1';
+                wait until rising_edge(CLK);
+            end loop;
+            DIN_WR_EN   <= '0';
+            SEND        <= '1';
+            wait until rising_edge(CLK);
+            SEND    <= '0';
+            wait until rising_edge(CLK) and BUSY='0';
+        end procedure;
+        
+        procedure request_resend(buf_i : in natural) is
+        begin
+            PENDING_RESEND_REQUESTS(buf_i)  <= '1';
+            wait until rising_edge(CLK) and RESEND_REQUEST_ACK(buf_i)='1';
+            PENDING_RESEND_REQUESTS(buf_i)  <= '0';
+            wait until rising_edge(CLK) and BUSY='0';
+        end procedure;
+        
+        procedure acknowledge(buf_i : in natural) is
+        begin
+            PENDING_ACKS(buf_i) <= '1';
+            wait until rising_edge(CLK) and ACK_ACK(buf_i)='1';
+            PENDING_ACKS(buf_i) <= '0';
+            wait until rising_edge(CLK) and BUSY='0';
+        end procedure;
+        
     begin
         RST <= '1';
         wait for 100 ns;
@@ -93,30 +124,21 @@ BEGIN
         
         -- test 1: send a 128 byte packet
         
-        for byte_i in 0 to 127 loop
-            DIN         <= stdulv(byte_i, 8);
-            DIN_WR_EN   <= '1';
-            wait until rising_edge(CLK);
-        end loop;
-        DIN_WR_EN   <= '0';
-        SEND        <= '1';
-        wait until rising_edge(CLK);
-        SEND    <= '0';
-        wait until rising_edge(CLK) and BUSY='0';
+        report "Starting test 1";
+        send_packet(0);
         
         wait for 100 ns;
         
         -- test 2: resend the previous packet by resend request
         
-        PENDING_RESEND_REQUESTS(0)  <= '1';
-        wait until rising_edge(CLK) and RESEND_REQUEST_ACK(0)='1';
-        PENDING_RESEND_REQUESTS(0)  <= '0';
-        wait until rising_edge(CLK) and BUSY='0';
+        report "Starting test 2";
+        request_resend(0);
         
         wait for 100 ns;
         
         -- test 3: resend the previous packet by timeout
         
+        report "Starting test 3";
         wait until rising_edge(CLK) and BUSY='1';
         wait until rising_edge(CLK) and BUSY='0';
         
@@ -124,10 +146,35 @@ BEGIN
         
         -- test 4: acknowledge the previous packet
         
-        PENDING_ACKS(0) <= '1';
-        wait until rising_edge(CLK) and ACK_ACK(0)='1';
-        PENDING_ACKS(0) <= '0';
-        wait until rising_edge(CLK) and BUSY='0';
+        report "Starting test 4";
+        acknowledge(0);
+        
+        wait for 100 ns;
+        
+        -- test 5: fill the packet buffer
+        
+        report "Starting test 5";
+        for packet_i in 0 to 7 loop
+            send_packet(packet_i+1);
+        end loop;
+        
+        wait for 100 ns;
+        
+        -- test 6: request a resend for each packet
+        
+        report "Starting test 6";
+        for packet_i in 0 to 7 loop
+            request_resend(packet_i);
+        end loop;
+        
+        wait for 100 ns;
+        
+        -- test 7: acknowledge all packets
+        
+        report "Starting test 7";
+        for packet_i in 0 to 7 loop
+            acknowledge(packet_i);
+        end loop;
         
         wait for 100 ns;
         
