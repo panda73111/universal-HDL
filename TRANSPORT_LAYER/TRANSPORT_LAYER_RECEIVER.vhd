@@ -13,14 +13,10 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.TRANSPORT_LAYER_PKG.all;
+use work.help_funcs.all;
 
 entity TRANSPORT_LAYER_RECEIVER is
-    generic (
-        BUFFERED_PACKETS    : positive;
-        DATA_MAGIC          : std_ulogic_vector(7 downto 0);
-        ACK_MAGIC           : std_ulogic_vector(7 downto 0);
-        RESEND_MAGIC        : std_ulogic_vector(7 downto 0)
-    );
     port (
         CLK : in std_ulogic;
         RST : in std_ulogic;
@@ -30,6 +26,11 @@ entity TRANSPORT_LAYER_RECEIVER is
         
         DOUT        : out std_ulogic_vector(7 downto 0) := x"00";
         DOUT_VALID  : out std_ulogic := '0';
+        
+        RECORDS_INDEX   : out std_ulogic_vector(7 downto 0) := x"00";
+        RECORDS_DIN     : in packet_record_type;
+        RECORDS_DOUT    : out packet_record_type := packet_record_type_def;
+        RECORDS_WR_EN   : out std_ulogic := '0';
         
         BUSY    : out std_ulogic := '0'
     );
@@ -110,7 +111,7 @@ begin
         );
     
     recv_stm_proc : process(RST, cur_recv_reg)
-        alias cr is cur_recv_reg;
+        alias cr is cur_reg;
         variable r  : recv_reg_type := recv_reg_type_def;
     begin
         r   := cr;

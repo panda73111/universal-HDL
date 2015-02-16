@@ -36,13 +36,10 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.TRANSPORT_LAYER_PKG.all;
 use work.help_funcs.all;
 
 entity TRANSPORT_LAYER is
-    generic (
-        TIMEOUT_CYCLES      : positive := 50000; -- 1 ms
-        BUFFERED_PACKETS    : positive := 8
-    );
     port (
         CLK : in std_ulogic;
         RST : in std_ulogic;
@@ -66,68 +63,13 @@ end TRANSPORT_LAYER;
 
 architecture rtl of TRANSPORT_LAYER is
     
-    constant DATA_MAGIC     : std_ulogic_vector(7 downto 0) := x"65";
-    constant ACK_MAGIC      : std_ulogic_vector(7 downto 0) := x"66";
-    constant RESEND_MAGIC   : std_ulogic_vector(7 downto 0) := x"67";
-    
     constant BUF_INDEX_BITS : natural := log2(BUFFERED_PACKETS);
-    constant TIMEOUT_BITS   : natural := log2(TIMEOUT_CYCLES);
     
     --- packet records, accessed by both state machines ---
-    
-    type packet_record_type is record
-        is_buffered     : boolean;
-        was_received    : boolean;
-        was_sent        : boolean;
-        buf_index       : std_ulogic_vector(BUF_INDEX_BITS-1 downto 0);
-    end record;
-    
-    constant packet_record_type_def : packet_record_type := (
-        is_buffered     => false,
-        was_received    => false,
-        was_sent        => false,
-        buf_index       => (others => '0')
-    );
-    
-    type packet_records_type is
-        array(0 to 255) of
-        packet_record_type;
-    
-    constant packet_records_type_def    : packet_records_type := (
-        others => packet_record_type_def
-    );
     
     signal packet_records       : packet_records_type := packet_records_type_def;
     signal send_records_dout    : packet_record_type := packet_record_type_def;
     signal recv_records_dout    : packet_record_type := packet_record_type_def;
-    
-    --- timeout records ---
-    
-    type timeout_record_type is record
-        is_active       : boolean;
-        timeout         : unsigned(TIMEOUT_BITS downto 0);
-        send_buf_addr   : std_ulogic_vector(BUF_INDEX_BITS+2 downto 0);
-    end record;
-    
-    type timeout_records_type is
-        array(0 to BUFFERED_PACKETS-1) of
-        timeout_record_type;
-    
-    constant timeout_def    :
-        unsigned(TIMEOUT_BITS downto 0) :=
-        uns(TIMEOUT_CYCLES-1, timeout_record_type.buf_p'length);
-    
-    constant timeout_records_type_def   : timeout_records_type := (
-        others => (
-            is_active       => false,
-            timeout         => TIMEOUT_DEF,
-            send_buf_addr   => (others => '0')
-        )
-    );
-    
-    signal timeout_records  : timeout_records_type := timeout_records_type_def;
-    signal pending_timeouts : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-    signal timeout_ack      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
     signal sender_busy, receiver_busy   : std_ulogic := '0';
     
@@ -198,37 +140,6 @@ begin
             if cur_recv_reg.records_wr_en='1' then
                 packet_records(int(cur_send_reg.records_index)) <= cur_recv_reg.records_din;
             end if;
-        end if;
-    end process;
-    
-    timeout_proc : process(RST, CLK)
-        constant timeout_high   : natural := timeout_records_type.timeout'high;
-    begin
-        if RST='1' then
-            timeout_records     <= timeout_records_type_def;
-            pending_timeouts    <= (others => '0');
-        elsif rising_edge(CLK) then
-            for i in 0 to BUFFERED_PACKETS-1 loop
-                if timeout_records(i).is_active then
-                    -- waiting for acknowledge of packet at send buffer position [i]
-                    timeout_records(i).timeout  <= timeout_records(i).timeout-1;
-                    if timeout_records(i).timeout(timeout_high)='1' then
-                        -- packet at send buffer position [i] timed out
-                        pending_timeouts(i)             <= '1';
-                        timeout_records(i).timeout      <= timeout_def;
-                        timeout_records(i).is_active    <= false;
-                    end if;
-                end if;
-                
-                if timeout_ack(i)='1' then
-                    -- packet of which the acknowledge timed out was resent
-                    pending_timeouts(i) <= '0';
-                end if;
-                
-                if timeout_start(i)='1' then
-                    timeout_records(i).is_active    <= true;
-                end if;
-            end loop;
         end if;
     end process;
     

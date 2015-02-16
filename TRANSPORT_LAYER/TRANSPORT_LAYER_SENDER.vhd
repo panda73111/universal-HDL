@@ -13,13 +13,12 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use work.TRANSPORT_LAYER_PKG.all;
+use work.help_funcs.all;
 
 entity TRANSPORT_LAYER_SENDER is
     generic (
-        BUFFERED_PACKETS    : positive;
-        DATA_MAGIC          : std_ulogic_vector(7 downto 0);
-        ACK_MAGIC           : std_ulogic_vector(7 downto 0);
-        RESEND_MAGIC        : std_ulogic_vector(7 downto 0)
+        TIMEOUT_CYCLES      : positive := 50000 -- 1 ms
     );
     port (
         CLK : in std_ulogic;
@@ -32,12 +31,16 @@ entity TRANSPORT_LAYER_SENDER is
         DIN_WR_EN   : in std_ulogic;
         SEND        : in std_ulogic;
         
-        PENDING_TIMEOUTS    : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        TIMEOUT_ACK         : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-        TIMEOUT_START       : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+        PENDING_RESEND_REQUESTS : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        RESEND_REQUEST_ACK      : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
         
-        ACKS_RECEIVED   : in std_ulogic_vector(BUFFERED_PACKET-1 downto 0);
-        ACK_ACK         : out std_ulogic_vector(BUFFERED_PACKET-1 downto 0) := (others => '0');
+        PENDING_ACKS    : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        ACK_ACK         : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+        
+        RECORDS_INDEX   : out std_ulogic_vector(7 downto 0) := x"00";
+        RECORDS_DOUT    : in packet_record_type;
+        RECORDS_DIN     : out packet_record_type := packet_record_type_def;
+        RECORDS_WR_EN   : out std_ulogic := '0';
         
         BUSY    : out std_ulogic := '0'
     );
@@ -47,8 +50,49 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     
     constant BUF_INDEX_BITS : natural := log2(BUFFERED_PACKETS);
     
+    --- packet meta information records, for resending packets ---
+    
+    type packet_meta_record_type is record
+        packet_number   : unsigned(7 downto 0);
+        packet_length   : unsigned(7 downto 0);
+        checksum        : std_ulogic_vector(7 downto 0);
+    end record;
+    
+    constant packet_meta_record_type_def    : packet_meta_record_type := (
+        packet_number   => x"00",
+        packet_length   => x"00",
+        checksum        => x"00"
+    );
+    
+    type packet_meta_records_type is
+        array(0 to BUFFERED_PACKETS-1) of
+        packet_meta_record_type;
+    
+    constant packet_meta_records_type_def   : packet_meta_records_type := (
+        others  => packet_meta_record_type_def
+    );
+    
+    signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
+    
+    signal meta_dout    : packet_meta_record_type := packet_meta_record_type_def;
+    
+    --- main state machine ---
+    
     type state_type is (
-        WAITING_FOR_DATA
+        WAITING_FOR_DATA,
+        SENDING_DATA_PACKET_MAGIC,
+        SENDING_DATA_PACKET_NUMBER,
+        SENDING_DATA_PACKET_LENGTH,
+        SENDING_DATA_PACKET_PAYLOAD,
+        SENDING_CHECKSUM,
+        EVALUATING_TIMED_OUT_PACKET_ADDR,
+        EVALUATING_REQUESTED_TO_RESEND_PACKET_ADDR,
+        RESENDING_DATA_PACKET_MAGIC,
+        RESENDING_DATA_PACKET_NUMBER,
+        RESENDING_DATA_PACKET_LENGTH,
+        RESENDING_DATA_PACKET_PAYLOAD,
+        RESENDING_CHECKSUM,
+        REMOVING_PACKET_FROM_BUFFER
     );
     
     type reg_type is record
@@ -59,12 +103,12 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         packet_index            : unsigned(BUF_INDEX_BITS-1 downto 0);
         bytes_left_counter      : unsigned(8 downto 0);
         next_packet_number      : unsigned(7 downto 0);
-        packet_records_p        : natural range 0 to BUFFERED_PACKETS;
-        packet_records_wr_en    : boolean;
         checksum                : std_ulogic_vector(7 downto 0);
         buffered_packets_count  : unsigned(BUF_INDEX_BITS-1 downto 0);
+        occupied_buf_slots      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         next_free_buf_index     : unsigned(BUF_INDEX_BITS-1 downto 0);
-        --- acknowledge handling ---
+        --- resend request and acknowledge handling ---
+        resend_request_ack      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         ack_ack                 : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         --- packet buffer ---
         buf_wr_addr             : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
@@ -72,10 +116,14 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         --- timeout ---
         timeout_ack             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         timeout_start           : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        --- records ---
+        timeout_rst             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        --- global packet records ---
         records_index           : unsigned(7 downto 0);
         records_din             : packet_record_type;
         records_wr_en           : std_ulogic;
+        --- packet meta information records ---
+        meta_din                : packet_meta_record_type;
+        meta_wr_en              : std_ulogic;
     end record;
     
     constant reg_type_def   : reg_type := (
@@ -86,12 +134,12 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         packet_index            => (others => '0'),
         bytes_left_counter      => (others => '0'),
         next_packet_number      => x"00",
-        packet_records_p        => 0,
-        packet_records_wr_en    => false,
         checksum                => x"00",
         buffered_packets_count  => (others => '0'),
+        occupied_buf_slots      => (others => '0'),
         next_free_buf_index     => (others => '0'),
-        --- acknowledge handling ---
+        --- resend request and acknowledge handling ---
+        resend_request_ack      => (others => '0'),
         ack_ack                 => (others => '0'),
         --- packet buffer ---
         buf_wr_addr             => (others => '0'),
@@ -99,23 +147,60 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         --- timeout ---
         timeout_ack             => (others => '0'),
         timeout_start           => (others => '0'),
-        --- records ---
+        timeout_rst             => (others => '0'),
+        --- global packet records ---
         records_index           => x"00",
         records_din             => packet_record_type_def,
-        records_wr_en           => '0'
+        records_wr_en           => '0',
+        --- packet meta information records ---
+        meta_din                => packet_meta_record_type_def,
+        meta_wr_en              => '0'
     );
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
     
     signal buf_dout : std_ulogic_vector(7 downto 0) := x"00";
     
+    --- timeout records ---
+    
+    constant TIMEOUT_BITS   : natural := log2(TIMEOUT_CYCLES);
+    
+    type timeout_record_type is record
+        is_active   : boolean;
+        timeout     : unsigned(TIMEOUT_BITS downto 0);
+        buf_addr    : std_ulogic_vector(BUF_INDEX_BITS+2 downto 0);
+    end record;
+    
+    type timeout_records_type is
+        array(0 to BUFFERED_PACKETS-1) of
+        timeout_record_type;
+    
+    constant timeout_def    :
+        unsigned(TIMEOUT_BITS downto 0) :=
+        uns(TIMEOUT_CYCLES-1, TIMEOUT_BITS+1);
+    
+    constant timeout_records_type_def   : timeout_records_type := (
+        others => (
+            is_active   => false,
+            timeout     => TIMEOUT_DEF,
+            buf_addr    => (others => '0')
+        )
+    );
+    
+    signal timeout_records  : timeout_records_type := timeout_records_type_def;
+    signal pending_timeouts : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    
 begin
     
     PACKET_OUT          <= cur_reg.packet_out;
     PACKET_OUT_VALID    <= cur_reg.packet_out_valid;
     
-    TIMEOUT_ACK     <= cur_reg.timeout_ack;
-    TIMEOUT_START   <= cur_reg.timeout_start;
+    RECORDS_INDEX   <= stdulv(cur_reg.records_index);
+    RECORDS_DIN     <= cur_reg.records_din;
+    RECORDS_WR_EN   <= cur_reg.records_wr_en;
+    
+    RESEND_REQUEST_ACK  <= cur_reg.resend_request_ack;
+    ACK_ACK             <= cur_reg.ack_ack;
     
     BUSY    <= '1' when cur_reg.state/=WAITING_FOR_DATA else '0';
     
@@ -126,7 +211,6 @@ begin
         )
         port map (
             CLK => CLK,
-            RST => RST,
             
             RD_ADDR => cur_reg.buf_rd_addr,
             WR_ADDR => cur_reg.buf_wr_addr,
@@ -136,8 +220,57 @@ begin
             DOUT    => buf_dout
         );
     
-    stm_proc : process(RST, cur_reg, PENDING_TIMEOUTS, SEND, DIN_WR_EN, ACKS_RECEIVED)
-        alias cr is cur_send_reg;
+    timeout_proc : process(RST, CLK)
+        constant timeout_high   : natural := timeout_record_type.timeout'high;
+    begin
+        if RST='1' then
+            timeout_records     <= timeout_records_type_def;
+            pending_timeouts    <= (others => '0');
+        elsif rising_edge(CLK) then
+            for i in 0 to BUFFERED_PACKETS-1 loop
+                if timeout_records(i).is_active then
+                    -- waiting for acknowledge of packet at send buffer position [i]
+                    timeout_records(i).timeout  <= timeout_records(i).timeout-1;
+                    if timeout_records(i).timeout(timeout_high)='1' then
+                        -- packet at send buffer position [i] timed out
+                        pending_timeouts(i)             <= '1';
+                        timeout_records(i).timeout      <= timeout_def;
+                        timeout_records(i).is_active    <= false;
+                    end if;
+                end if;
+                
+                if cur_reg.timeout_rst(i)='1' then
+                    pending_timeouts(i)             <= '0';
+                    timeout_records(i).timeout      <= timeout_def;
+                    timeout_records(i).is_active    <= false;
+                end if;
+                
+                if cur_reg.timeout_ack(i)='1' then
+                    -- packet of which the acknowledge timed out was resent
+                    pending_timeouts(i) <= '0';
+                end if;
+                
+                if cur_reg.timeout_start(i)='1' then
+                    timeout_records(i).is_active    <= true;
+                end if;
+            end loop;
+        end if;
+    end process;
+    
+    meta_proc : process(RST, CLK)
+    begin
+        if RST='1' then
+            packet_meta_records <= packet_meta_records_type_def;
+        elsif rising_edge(CLK) then
+            meta_dout   <= packet_meta_records(int(cur_reg.packet_index));
+            if cur_reg.meta_wr_en='1' then
+                packet_meta_records(int(cur_reg.packet_index))  <= cur_reg.meta_din;
+            end if;
+        end if;
+    end process;
+    
+    stm_proc : process(RST, cur_reg, buf_dout, pending_timeouts, PENDING_RESEND_REQUESTS, SEND, DIN_WR_EN, PENDING_ACKS)
+        alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
         
         procedure send_packet_byte(
@@ -154,7 +287,24 @@ begin
         end procedure;
         
         procedure send_packet_byte(
+            d           : in unsigned(7 downto 0);
+            next_state  : in state_type;
+            change_cond : in boolean
+        ) is
+        begin
+            send_packet_byte(stdulv(d), next_state, true);
+        end procedure;
+        
+        procedure send_packet_byte(
             d           : in std_ulogic_vector(7 downto 0);
+            next_state  : in state_type
+        ) is
+        begin
+            send_packet_byte(d, next_state, true);
+        end procedure;
+        
+        procedure send_packet_byte(
+            d           : in unsigned(7 downto 0);
             next_state  : in state_type
         ) is
         begin
@@ -163,21 +313,30 @@ begin
     begin
         r   := cr;
         
-        r.packet_out_valid  := '0';
-        r.timeout_ack       := (others => '0');
-        r.timeout_start     := (others => '0');
+        r.records_wr_en         := '0';
+        r.packet_out_valid      := '0';
+        r.timeout_ack           := (others => '0');
+        r.timeout_start         := (others => '0');
+        r.timeout_rst           := (others => '0');
+        r.resend_request_ack    := (others => '0');
+        r.ack_ack               := (others => '0');
+        r.meta_wr_en            := '0';
         
         if DIN_WR_EN='1' then
             r.packet_length := cr.packet_length+1;
+            r.buf_wr_addr   := cr.buf_wr_addr+1;
         end if;
         
         case cr.state is
             
             when WAITING_FOR_DATA =>
-                if PENDING_TIMEOUTS/=(pending_timeouts'range => '0') then
-                    r.state := EVALUATING_PACKET_ADDR_TO_RESEND;
+                if pending_timeouts/=(pending_timeouts'range => '0') then
+                    r.state := EVALUATING_TIMED_OUT_PACKET_ADDR;
                 end if;
-                if ACKS_RECEIVED/=(ACKS_RECEIVED'range => '0') then
+                if PENDING_RESEND_REQUESTS/=(PENDING_RESEND_REQUESTS'range => '0') then
+                    r.state := EVALUATING_REQUESTED_TO_RESEND_PACKET_ADDR;
+                end if;
+                if PENDING_ACKS/=(PENDING_ACKS'range => '0') then
                     r.state := REMOVING_PACKET_FROM_BUFFER;
                 end if;
                 if SEND='1' then
@@ -185,47 +344,99 @@ begin
                 end if;
             
             when SENDING_DATA_PACKET_MAGIC =>
-                r.checksum  := uns(DATA_MAGIC);
+                r.checksum                                          := DATA_MAGIC;
+                r.occupied_buf_slots(int(cr.next_free_buf_index))   := '1';
+                r.records_index                                     := cr.next_packet_number;
+                r.records_wr_en                                     := '1';
+                r.records_din                                       := (
+                    is_buffered     => true,
+                    was_sent        => true,
+                    buf_index       => cr.next_free_buf_index
+                );
                 send_packet_byte(DATA_MAGIC, SENDING_DATA_PACKET_NUMBER);
             
             when SENDING_DATA_PACKET_NUMBER =>
-                r.checksum  := cr.checksum+cr.next_packet_number;
+                r.checksum                  := cr.checksum+cr.next_packet_number;
+                r.meta_din.packet_number    := cr.next_packet_number;
                 send_packet_byte(cr.next_packet_number, SENDING_DATA_PACKET_LENGTH);
             
             when SENDING_DATA_PACKET_LENGTH =>
-                r.buf_rd_en             := '1';
-                r.bytes_left_counter    := cr.packet_length-1;
-                r.checksum              := cr.checksum+cr.packet_length;
+                r.buf_rd_addr               := cr.buf_rd_addr+1;
+                r.bytes_left_counter        := "0" & (cr.packet_length-2);
+                r.checksum                  := cr.checksum+cr.packet_length;
+                r.meta_din.packet_length    := cr.packet_length;
                 send_packet_byte(stdulv(cr.packet_length), SENDING_DATA_PACKET_PAYLOAD);
             
             when SENDING_DATA_PACKET_PAYLOAD =>
-                r.buf_rd_en             := '1';
                 r.buf_rd_addr           := cr.buf_rd_addr+1;
                 r.bytes_left_counter    := cr.bytes_left_counter-1;
-                r.checksum              := cr.checksum+send_buf_dout;
-                send_packet_byte(send_buf_dout, SENDING_CHECKSUM, cr.bytes_left_counter(8)='1');
+                r.checksum              := cr.checksum+buf_dout;
+                send_packet_byte(buf_dout, SENDING_CHECKSUM, cr.bytes_left_counter(8)='1');
             
             when SENDING_CHECKSUM =>
                 r.timeout_start(int(cr.packet_index))   := '1';
-                send_packet_byte(stdulv(cr.checksum), WAITING_FOR_DATA);
-                r.state := WAITING_FOR_DATA;
+                r.next_packet_number                    := cr.next_packet_number+1;
+                for i in 0 to BUFFERED_PACKETS-1 loop
+                    if cr.occupied_buf_slots(i)='0' then
+                        r.next_free_buf_index   := uns(i, BUF_INDEX_BITS);
+                    end if;
+                end loop;
+                r.meta_din.checksum := cr.checksum;
+                r.meta_wr_en        := '1';
+                send_packet_byte(cr.checksum, WAITING_FOR_DATA);
             
-            when EVALUATING_PACKET_ADDR_TO_RESEND =>
+            when EVALUATING_TIMED_OUT_PACKET_ADDR =>
                 for i in 0 to BUFFERED_PACKETS-1 loop
                     if pending_timeouts(i)='1' then
                         r.packet_index      := uns(i, BUF_INDEX_BITS);
-                        r.send_buf_rd_addr  := stdulv(i, BUF_INDEX_BITS) & x"00";
+                        r.buf_rd_addr       := stdulv(i, BUF_INDEX_BITS) & x"00";
                         r.timeout_ack       := (i => '1', others => '0');
                     end if;
                 end loop;
-                r.state := SENDING_DATA_PACKET_MAGIC;
+                r.state := RESENDING_DATA_PACKET_MAGIC;
+            
+            when EVALUATING_REQUESTED_TO_RESEND_PACKET_ADDR =>
+                for i in 0 to BUFFERED_PACKETS-1 loop
+                    if PENDING_RESEND_REQUESTS(i)='1' then
+                        r.packet_index          := uns(i, BUF_INDEX_BITS);
+                        r.buf_rd_addr           := stdulv(i, BUF_INDEX_BITS) & x"00";
+                        r.timeout_rst           := (i => '1', others => '0');
+                        r.resend_request_ack    := (i => '1', others => '0');
+                    end if;
+                end loop;
+                r.state := RESENDING_DATA_PACKET_MAGIC;
+            
+            when RESENDING_DATA_PACKET_MAGIC =>
+                send_packet_byte(DATA_MAGIC, RESENDING_DATA_PACKET_NUMBER);
+            
+            when RESENDING_DATA_PACKET_NUMBER =>
+                send_packet_byte(meta_dout.packet_number, RESENDING_DATA_PACKET_LENGTH);
+            
+            when RESENDING_DATA_PACKET_LENGTH =>
+                r.buf_rd_addr           := cr.buf_rd_addr+1;
+                r.bytes_left_counter    := "0" & (meta_dout.packet_length-2);
+                send_packet_byte(meta_dout.packet_length, RESENDING_DATA_PACKET_PAYLOAD);
+            
+            when RESENDING_DATA_PACKET_PAYLOAD =>
+                r.buf_rd_addr           := cr.buf_rd_addr+1;
+                r.bytes_left_counter    := cr.bytes_left_counter-1;
+                send_packet_byte(buf_dout, RESENDING_CHECKSUM, cr.bytes_left_counter(8)='1');
+            
+            when RESENDING_CHECKSUM =>
+                r.timeout_start(int(cr.packet_index))   := '1';
+                send_packet_byte(meta_dout.checksum, WAITING_FOR_DATA);
             
             when REMOVING_PACKET_FROM_BUFFER =>
                 for i in 0 to BUFFERED_PACKETS-1 loop
-                    if ACKS_RECEIVED(i)='1' then
-                        ack_ack <= (i => '1', others => '0');
+                    if PENDING_ACKS(i)='1' then
+                        r.occupied_buf_slots(i) := '0';
+                        r.ack_ack               := (i => '1', others => '0');
                     end if;
                 end loop;
+                r.records_index := cr.next_packet_number;
+                r.records_wr_en := '1';
+                r.records_din   := packet_record_type_def;
+                r.state := WAITING_FOR_DATA;
             
         end case;
         
