@@ -50,32 +50,6 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     
     constant BUF_INDEX_BITS : natural := log2(BUFFERED_PACKETS);
     
-    --- packet meta information records, for resending packets ---
-    
-    type packet_meta_record_type is record
-        packet_number   : unsigned(7 downto 0);
-        packet_length   : unsigned(7 downto 0);
-        checksum        : std_ulogic_vector(7 downto 0);
-    end record;
-    
-    constant packet_meta_record_type_def    : packet_meta_record_type := (
-        packet_number   => x"00",
-        packet_length   => x"00",
-        checksum        => x"00"
-    );
-    
-    type packet_meta_records_type is
-        array(0 to BUFFERED_PACKETS-1) of
-        packet_meta_record_type;
-    
-    constant packet_meta_records_type_def   : packet_meta_records_type := (
-        others  => packet_meta_record_type_def
-    );
-    
-    signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
-    
-    signal meta_dout    : packet_meta_record_type := packet_meta_record_type_def;
-    
     --- main state machine ---
     
     type state_type is (
@@ -189,6 +163,9 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     
     signal timeout_records  : timeout_records_type := timeout_records_type_def;
     signal pending_timeouts : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    
+    signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
+    signal meta_dout            : packet_meta_record_type := packet_meta_record_type_def;
     
 begin
     
