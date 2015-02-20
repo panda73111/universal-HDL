@@ -51,51 +51,51 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     );
     
     type reg_type is record
-        state                   : state_type;
-        dout                    : std_ulogic_vector(7 downto 0);
-        dout_valid              : std_ulogic;
-        next_packet_number      : unsigned(7 downto 0);
-        packet_number           : unsigned(7 downto 0);
-        checksum                : std_ulogic_vector(7 downto 0);
-        occupied_buf_slots      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        next_free_buf_index     : unsigned(BUF_INDEX_BITS-1 downto 0);
+        state               : state_type;
+        dout                : std_ulogic_vector(7 downto 0);
+        dout_valid          : std_ulogic;
+        next_packet_number  : unsigned(7 downto 0);
+        packet_number       : unsigned(7 downto 0);
+        checksum            : std_ulogic_vector(7 downto 0);
+        occupied_buf_slots  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        next_free_buf_index : unsigned(BUF_INDEX_BITS-1 downto 0);
         --- resend request and acknowledge handling ---
-        pending_resend_requests : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        pending_acks            : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        pending_resend_reqs : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        pending_acks        : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         --- packet buffer ---
-        buf_wr_addr             : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
-        buf_rd_addr             : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
+        buf_wr_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
+        buf_rd_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
         --- global packet records ---
-        records_index           : unsigned(7 downto 0);
-        records_din             : packet_record_type;
-        records_wr_en           : std_ulogic;
+        records_index       : unsigned(7 downto 0);
+        records_din         : packet_record_type;
+        records_wr_en       : std_ulogic;
         --- packet meta information records ---
-        meta_din                : packet_meta_record_type;
-        meta_wr_en              : std_ulogic;
+        meta_din            : packet_meta_record_type;
+        meta_wr_en          : std_ulogic;
     end record;
     
     constant reg_type_def  : recv_state_type := (
-        state                   => WAITING_FOR_DATA,
-        dout                    => x"00",
-        dout_valid              => '0',
-        next_packet_number      => x"00",
-        packet_number           => x"00",
-        checksum                => x"00",
-        occupied_buf_slots      => (others => '0'),
-        next_free_buf_index     => (others => '0'),
+        state               => WAITING_FOR_DATA,
+        dout                => x"00",
+        dout_valid          => '0',
+        next_packet_number  => x"00",
+        packet_number       => x"00",
+        checksum            => x"00",
+        occupied_buf_slots  => (others => '0'),
+        next_free_buf_index => (others => '0'),
         --- resend request and acknowledge handling ---
-        resend_request_ack      => (others => '0'),
-        ack_ack                 => (others => '0'),
+        pending_resend_reqs => (others => '0'),
+        pending_acks        => (others => '0'),
         --- packet buffer ---
-        buf_wr_addr             => (others => '0'),
-        buf_rd_addr             => (others => '0'),
+        buf_wr_addr         => (others => '0'),
+        buf_rd_addr         => (others => '0'),
         --- global packet records ---
-        records_index           => x"00",
-        records_din             => packet_record_type_def,
-        records_wr_en           => '0',
+        records_index       => x"00",
+        records_din         => packet_record_type_def,
+        records_wr_en       => '0',
         --- packet meta information records ---
-        meta_din                => packet_meta_record_type_def,
-        meta_wr_en              => '0'
+        meta_din            => packet_meta_record_type_def,
+        meta_wr_en          => '0'
     );
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
@@ -114,7 +114,7 @@ begin
     RECORDS_DIN     <= cur_reg.records_din;
     RECORDS_WR_EN   <= cur_reg.records_wr_en;
     
-    PENDING_RESEND_REQUESTS <= cur_reg.pending_resend_requests;
+    PENDING_RESEND_REQUESTS <= cur_reg.pending_resend_reqs;
     PENDING_ACKS            <= cur_reg.pending_acks;
     
     BUSY    <= '1' when cur_reg.state/=WAITING_FOR_DATA else '0';
@@ -158,7 +158,8 @@ begin
         r.dout_valid    := '0';
         r.meta_wr_en    := '0';
         
-        r.pending_acks  := cr.pending_acks and (cr.pending_acks xnor ACK_ACK);
+        r.pending_acks          := cr.pending_acks          and (cr.pending_acks xnor ACK_ACK);
+        r.pending_resend_reqs   := cr.pending_resend_reqs   and (cr.pending_resend_reqs xnor ACK_ACK);
         
         case cr.state is
             
@@ -183,9 +184,6 @@ begin
                 r.records_index := uns(PACKET_DIN);
                 r.state         := COMPARING_ACK_CHECKSUM;
             
-            when CHECKING_RESEND_PACKET_NUMBER =>
-                r.checksum  := cr.checksum+PACKET_DIN;
-            
             when COMPARING_ACK_CHECKSUM =>
                 if
                     cr.checksum=PACKET_DIN and
@@ -193,6 +191,22 @@ begin
                     RECORDS_DOUT.was_sent
                 then
                     r.pending_acks(int(RECORDS_DOUT.buf_index)) := '1';
+                end if;
+                r.state     := WAITING_FOR_DATA;
+            
+            when CHECKING_RESEND_PACKET_NUMBER =>
+                r.packet_number := uns(PACKET_DIN);
+                r.checksum      := cr.checksum+PACKET_DIN;
+                r.records_index := uns(PACKET_DIN);
+                r.state         := COMPARING_RESEND_CHECKSUM;
+            
+            when COMPARING_RESEND_CHECKSUM =>
+                if
+                    cr.checksum=PACKET_DIN and
+                    RECORDS_DOUT.is_buffered and
+                    RECORDS_DOUT.was_sent
+                then
+                    r.pending_resend_reqs(int(RECORDS_DOUT.buf_index))  := '1';
                 end if;
                 r.state     := WAITING_FOR_DATA;
             
