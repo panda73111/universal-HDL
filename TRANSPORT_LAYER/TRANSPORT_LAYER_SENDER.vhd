@@ -360,7 +360,7 @@ begin
             
             when SENDING_DATA_PACKET_LENGTH =>
                 r.buf_rd_addr           := cr.buf_rd_addr+1;
-                r.bytes_left_counter    := "0" & (cr.meta_din.packet_length-2);
+                r.bytes_left_counter    := ("0" & cr.meta_din.packet_length)-2;
                 r.checksum              := cr.checksum+cr.meta_din.packet_length;
                 send_packet_byte(stdulv(cr.meta_din.packet_length), SENDING_DATA_PACKET_PAYLOAD);
             
