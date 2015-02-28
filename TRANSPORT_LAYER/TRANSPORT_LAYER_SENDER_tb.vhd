@@ -1,7 +1,7 @@
 --------------------------------------------------------------------------------
 -- Engineer: Sebastian Huether
 --
--- Create Date:   16:39:40 2/15/2015
+-- Create Date:   16:39:40 02/15/2015
 -- Module Name:   TRANSPORT_LAYER_SENDER_tb
 -- Project Name:  TRANSPORT_LAYER_SENDER
 -- Tool versions: Xilinx ISE 14.7
@@ -87,9 +87,9 @@ BEGIN
         
         procedure send_packet(pkt_i : in natural) is
         begin
+            DIN_WR_EN   <= '1';
             for byte_i in 0 to 127 loop
                 DIN         <= stdulv(pkt_i mod 8, 3) & stdulv(byte_i mod 32, 5);
-                DIN_WR_EN   <= '1';
                 wait until rising_edge(CLK);
             end loop;
             DIN_WR_EN   <= '0';

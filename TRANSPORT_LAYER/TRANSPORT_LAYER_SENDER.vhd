@@ -300,6 +300,7 @@ begin
         r.resend_request_ack    := (others => '0');
         r.ack_ack               := (others => '0');
         r.meta_wr_en            := '0';
+        r.meta_din.is_buffered  := true;
         
         if DIN_WR_EN='1' then
             r.packet_length := cr.packet_length+1;
