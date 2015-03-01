@@ -60,26 +60,19 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     
     type reg_type is record
         state               : state_type;
-        dout_valid          : std_ulogic;
         packet_number       : unsigned(7 downto 0);
         packet_index        : unsigned(BUF_INDEX_BITS-1 downto 0);
         bytes_left_counter  : unsigned(8 downto 0);
         checksum            : std_ulogic_vector(7 downto 0);
         occupied_buf_slots  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         next_free_buf_index : unsigned(BUF_INDEX_BITS-1 downto 0);
-        --- buffer readout ---
         got_first_packet    : boolean;
-        index_to_read       : unsigned(BUF_INDEX_BITS-1 downto 0);
-        next_number_to_read : unsigned(7 downto 0);
-        bytes_left_to_read  : unsigned(8 downto 0);
-        reading_out         : boolean;
         --- resend request and acknowledge handling ---
         pending_resend_reqs : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         pending_acks        : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         --- packet buffer ---
         buf_wr_en           : std_ulogic;
         buf_wr_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
-        buf_rd_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
         --- global packet records ---
         records_index       : unsigned(7 downto 0);
         records_din         : packet_record_type;
@@ -91,26 +84,19 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     
     constant reg_type_def  : reg_type := (
         state               => WAITING_FOR_DATA,
-        dout_valid          => '0',
         packet_number       => x"00",
         packet_index        => (others => '0'),
         bytes_left_counter  => (others => '0'),
         checksum            => x"00",
         occupied_buf_slots  => (others => '0'),
         next_free_buf_index => (others => '0'),
-        --- buffer readout ---
         got_first_packet    => false,
-        index_to_read       => (others => '0'),
-        next_number_to_read => x"00",
-        bytes_left_to_read  => (others => '0'),
-        reading_out         => false,
         --- resend request and acknowledge handling ---
         pending_resend_reqs => (others => '0'),
         pending_acks        => (others => '0'),
         --- packet buffer ---
         buf_wr_en           => '0',
         buf_wr_addr         => (others => '0'),
-        buf_rd_addr         => (others => '0'),
         --- global packet records ---
         records_index       => x"00",
         records_din         => packet_record_type_def,
@@ -127,10 +113,17 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
     signal meta_dout            : packet_meta_record_type := packet_meta_record_type_def;
     
+    --- buffer readout ---
+    signal buf_rd_addr          : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0) := (others => '0');
+    signal next_number_to_read  : unsigned(7 downto 0) := x"00";
+    signal bytes_left_to_read   : unsigned(8 downto 0) := (others => '0');
+    signal reading_out          : boolean := false;
+    signal readout_index        : unsigned(BUF_INDEX_BITS-1 downto 0) := (others => '0');
+    signal readout_meta_rm_en   : std_ulogic := '0';
+    
 begin
     
     DOUT        <= buf_dout;
-    DOUT_VALID  <= cur_reg.dout_valid;
     
     RECORDS_INDEX   <= stdulv(next_reg.records_index);
     RECORDS_DIN     <= cur_reg.records_din;
@@ -139,7 +132,7 @@ begin
     PENDING_RESEND_REQUESTS <= cur_reg.pending_resend_reqs;
     PENDING_ACKS            <= cur_reg.pending_acks;
     
-    BUSY    <= '1' when cur_reg.state/=WAITING_FOR_DATA or cur_reg.reading_out else '0';
+    BUSY    <= '1' when cur_reg.state/=WAITING_FOR_DATA or reading_out else '0';
     
     receive_buf_DUAL_PORT_RAM_inst : entity work.DUAL_PORT_RAM
         generic map (
@@ -149,7 +142,7 @@ begin
         port map (
             CLK => CLK,
             
-            RD_ADDR => cur_reg.buf_rd_addr,
+            RD_ADDR => buf_rd_addr,
             WR_ADDR => cur_reg.buf_wr_addr,
             WR_EN   => next_reg.buf_wr_en,
             DIN     => PACKET_IN,
@@ -162,14 +155,60 @@ begin
         if RST='1' then
             packet_meta_records <= packet_meta_records_type_def;
         elsif rising_edge(CLK) then
-            meta_dout   <= packet_meta_records(int(next_reg.index_to_read));
+            meta_dout   <= packet_meta_records(int(readout_index));
             if cur_reg.meta_wr_en='1' then
                 packet_meta_records(int(cur_reg.packet_index))  <= cur_reg.meta_din;
+            end if;
+            if readout_meta_rm_en='1' then
+                packet_meta_records(int(readout_index)) <= packet_meta_record_type_def;
             end if;
         end if;
     end process;
     
-    stm_proc : process(RST, cur_reg, meta_dout, ACK_ACK, RESEND_REQUEST_ACK, PACKET_IN, PACKET_IN_WR_EN, RECORDS_DOUT)
+    readout_proc : process(RST, CLK)
+    begin
+        if RST='1' then
+            DOUT_VALID          <= '0';
+            next_number_to_read <= x"00";
+            reading_out         <= false;
+            readout_meta_rm_en  <= '0';
+        elsif rising_edge(CLK) then
+            DOUT_VALID          <= '0';
+            readout_meta_rm_en  <= '0';
+            
+            if reading_out then
+                
+                DOUT_VALID          <= '1';
+                buf_rd_addr         <= buf_rd_addr+1;
+                bytes_left_to_read  <= bytes_left_to_read-1;
+                if bytes_left_to_read(8)='1' then
+                    -- finished reading one packet, remove it from the buffer
+                    reading_out         <= false;
+                    readout_meta_rm_en  <= '1';
+                    next_number_to_read <= next_number_to_read+1;
+                end if;
+                
+            elsif cur_reg.got_first_packet then
+                
+                buf_rd_addr         <= stdulv(readout_index-1) & x"00";
+                readout_index       <= readout_index-1;
+                bytes_left_to_read  <= ("0" & meta_dout.packet_length)-2;
+                if
+                    meta_dout.is_buffered and
+                    meta_dout.packet_number=next_number_to_read
+                then
+                    reading_out         <= true;
+                else
+                    -- search the next packet number to read in the metadata records
+                    readout_index   <= readout_index+1;
+                end if;
+                
+            end if;
+        end if;
+    end process;
+    
+    stm_proc : process(RST, cur_reg, readout_meta_rm_en, readout_index,
+        ACK_ACK, RESEND_REQUEST_ACK, PACKET_IN, PACKET_IN_WR_EN, RECORDS_DOUT)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -177,14 +216,17 @@ begin
         
         r.records_wr_en         := '0';
         r.buf_wr_en             := '0';
-        r.dout_valid            := '0';
         r.records_din.was_sent  := false;
         r.meta_wr_en            := '0';
         r.meta_din.is_buffered  := true;
         
         -- high ACK_ACK and RESEND_REQUEST_ACK bits clear high pending_acks and pending_resend_reqs bits
-        r.pending_acks          := cr.pending_acks          and (cr.pending_acks xnor ACK_ACK);
-        r.pending_resend_reqs   := cr.pending_resend_reqs   and (cr.pending_resend_reqs xnor RESEND_REQUEST_ACK);
+        r.pending_acks          := cr.pending_acks          and (cr.pending_acks xor ACK_ACK);
+        r.pending_resend_reqs   := cr.pending_resend_reqs   and (cr.pending_resend_reqs xor RESEND_REQUEST_ACK);
+        
+        if readout_meta_rm_en='1' then
+            r.occupied_buf_slots(int(readout_index))    := '0';
+        end if;
         
         case cr.state is
             
@@ -286,28 +328,6 @@ begin
                 r.state := WAITING_FOR_DATA;
             
         end case;
-        
-        if cr.reading_out then
-            r.dout_valid            := '1';
-            r.buf_rd_addr           := cr.buf_rd_addr+1;
-            r.bytes_left_to_read    := cr.bytes_left_to_read-1;
-            if cr.bytes_left_to_read(8)='1' then
-                r.reading_out           := false;
-                r.next_number_to_read   := cr.next_number_to_read+1;
-            end if;
-        elsif cr.got_first_packet then
-            r.buf_rd_addr   := stdulv(cr.index_to_read) & x"00";
-            if
-                meta_dout.is_buffered and
-                meta_dout.packet_number=cr.next_number_to_read
-            then
-                r.reading_out           := true;
-                r.bytes_left_to_read    := ("0" & meta_dout.packet_length)-2;
-            else
-                -- search the next packet number to read in the metadata records
-                r.index_to_read := cr.index_to_read+1;
-            end if;
-        end if;
         
         if RST='1' then
             r   := reg_type_def;
