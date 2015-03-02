@@ -62,8 +62,8 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         packet_index        : unsigned(BUF_INDEX_BITS-1 downto 0);
         bytes_left_counter  : unsigned(8 downto 0);
         checksum            : std_ulogic_vector(7 downto 0);
-        occupied_buf_slots  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        next_free_buf_index : unsigned(BUF_INDEX_BITS-1 downto 0);
+        occupied_slots      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        next_free_slot      : unsigned(BUF_INDEX_BITS-1 downto 0);
         got_first_packet    : boolean;
         --- resend request and acknowledge handling ---
         pending_resend_reqs : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
@@ -86,8 +86,8 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         packet_index        => (others => '0'),
         bytes_left_counter  => (others => '0'),
         checksum            => x"00",
-        occupied_buf_slots  => (others => '0'),
-        next_free_buf_index => (others => '0'),
+        occupied_slots      => (others => '0'),
+        next_free_slot      => (others => '0'),
         got_first_packet    => false,
         --- resend request and acknowledge handling ---
         pending_resend_reqs => (others => '0'),
@@ -268,16 +268,16 @@ begin
         r.pending_resend_reqs   := cr.pending_resend_reqs   and (cr.pending_resend_reqs xor RESEND_REQUEST_ACK);
         
         if cur_readout_reg.packet_rm_en='1' then
-            r.occupied_buf_slots(int(cur_readout_reg.slot_index))    := '0';
+            r.occupied_slots(int(cur_readout_reg.slot_index))   := '0';
         end if;
         
         case cr.state is
             
             when WAITING_FOR_DATA =>
-                r.occupied_buf_slots(int(cr.next_free_buf_index))   := '1';
+                r.occupied_slots(int(cr.next_free_slot))    := '1';
                 r.records_index                 := cr.packet_number;
-                r.packet_index                  := cr.next_free_buf_index;
-                r.recv_records_din.buf_index    := cr.next_free_buf_index;
+                r.packet_index                  := cr.next_free_slot;
+                r.recv_records_din.buf_index    := cr.next_free_slot;
                 r.checksum                      := PACKET_IN;
                 if PACKET_IN_WR_EN='1' then
                     if PACKET_IN=DATA_MAGIC then
@@ -319,8 +319,8 @@ begin
             
             when COMPARING_DATA_CHECKSUM =>
                 for i in BUFFERED_PACKETS-1 downto 0 loop
-                    if cr.occupied_buf_slots(i)='0' then
-                        r.next_free_buf_index   := uns(i, BUF_INDEX_BITS);
+                    if cr.occupied_slots(i)='0' then
+                        r.next_free_slot        := uns(i, BUF_INDEX_BITS);
                         r.buf_wr_addr           := stdulv(i, BUF_INDEX_BITS) & x"00";
                     end if;
                 end loop;

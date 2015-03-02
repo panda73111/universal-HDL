@@ -77,8 +77,8 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         bytes_left_counter      : unsigned(8 downto 0);
         next_packet_number      : unsigned(7 downto 0);
         checksum                : std_ulogic_vector(7 downto 0);
-        occupied_buf_slots      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        next_free_buf_index     : unsigned(BUF_INDEX_BITS-1 downto 0);
+        occupied_slots          : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        next_free_slot          : unsigned(BUF_INDEX_BITS-1 downto 0);
         --- resend request and acknowledge handling ---
         resend_request_ack      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         ack_ack                 : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
@@ -107,8 +107,8 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         bytes_left_counter      => (others => '0'),
         next_packet_number      => x"00",
         checksum                => x"00",
-        occupied_buf_slots      => (others => '0'),
-        next_free_buf_index     => (others => '0'),
+        occupied_slots          => (others => '0'),
+        next_free_slot          => (others => '0'),
         --- resend request and acknowledge handling ---
         resend_request_ack      => (others => '0'),
         ack_ack                 => (others => '0'),
@@ -316,8 +316,8 @@ begin
         case cr.state is
             
             when WAITING_FOR_DATA =>
-                r.occupied_buf_slots(int(cr.next_free_buf_index))   := '1';
-                r.buf_rd_addr           := stdulv(cr.next_free_buf_index) & x"00";
+                r.occupied_slots(int(cr.next_free_slot))    := '1';
+                r.buf_rd_addr           := stdulv(cr.next_free_slot) & x"00";
                 r.send_records_index    := cr.next_packet_number;
                 if pending_timeouts/=(pending_timeouts'range => '0') then
                     r.state := EVALUATING_TIMED_OUT_PACKET_ADDR;
@@ -334,7 +334,7 @@ begin
             
             when SENDING_DATA_PACKET_MAGIC =>
                 r.checksum                  := DATA_MAGIC;
-                r.packet_index              := cr.next_free_buf_index;
+                r.packet_index              := cr.next_free_slot;
                 r.packet_length             := x"00";
                 r.meta_din.packet_number    := cr.next_packet_number;
                 r.meta_din.packet_length    := cr.packet_length;
@@ -343,11 +343,11 @@ begin
                 r.send_records_din          := (
                     is_buffered => true,
                     was_sent    => true,
-                    buf_index   => cr.next_free_buf_index
+                    buf_index   => cr.next_free_slot
                 );
                 for i in BUFFERED_PACKETS-1 downto 0 loop
-                    if cr.occupied_buf_slots(i)='0' then
-                        r.next_free_buf_index   := uns(i, BUF_INDEX_BITS);
+                    if cr.occupied_slots(i)='0' then
+                        r.next_free_slot        := uns(i, BUF_INDEX_BITS);
                         r.buf_wr_addr           := stdulv(i, BUF_INDEX_BITS) & x"00";
                     end if;
                 end loop;
@@ -422,7 +422,7 @@ begin
                 for i in BUFFERED_PACKETS-1 downto 0 loop
                     if PENDING_ACKS(i)='1' then
                         r.packet_index          := uns(i, BUF_INDEX_BITS);
-                        r.occupied_buf_slots(i) := '0';
+                        r.occupied_slots(i)     := '0';
                         r.meta_wr_en            := '1';
                         r.ack_ack               := (i => '1', others => '0');
                     end if;
