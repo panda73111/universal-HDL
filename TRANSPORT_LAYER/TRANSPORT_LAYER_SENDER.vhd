@@ -37,10 +37,8 @@ entity TRANSPORT_LAYER_SENDER is
         PENDING_ACKS    : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         ACK_ACK         : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
         
-        RECORDS_INDEX   : out std_ulogic_vector(7 downto 0) := x"00";
-        RECORDS_DOUT    : in packet_record_type;
-        RECORDS_DIN     : out packet_record_type := packet_record_type_def;
-        RECORDS_WR_EN   : out std_ulogic := '0';
+        SEND_RECORDS_INDEX  : in std_ulogic_vector(7 downto 0);
+        SEND_RECORDS_DOUT   : out packet_record_type := packet_record_type_def;
         
         BUSY    : out std_ulogic := '0'
     );
@@ -54,7 +52,6 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     
     type state_type is (
         WAITING_FOR_DATA,
-        CHECKING_FOR_FREE_PACKET_NUMBER,
         SENDING_DATA_PACKET_MAGIC,
         SENDING_DATA_PACKET_NUMBER,
         SENDING_DATA_PACKET_LENGTH,
@@ -93,9 +90,9 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         timeout_start           : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         timeout_rst             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         --- global packet records ---
-        records_index           : unsigned(7 downto 0);
-        records_din             : packet_record_type;
-        records_wr_en           : std_ulogic;
+        send_records_index      : unsigned(7 downto 0);
+        send_records_din        : packet_record_type;
+        send_records_wr_en      : std_ulogic;
         --- packet meta information records ---
         meta_din                : packet_meta_record_type;
         meta_wr_en              : std_ulogic;
@@ -123,9 +120,9 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         timeout_start           => (others => '0'),
         timeout_rst             => (others => '0'),
         --- global packet records ---
-        records_index           => x"00",
-        records_din             => packet_record_type_def,
-        records_wr_en           => '0',
+        send_records_index      => x"00",
+        send_records_din        => packet_record_type_def,
+        send_records_wr_en      => '0',
         --- packet meta information records ---
         meta_din                => packet_meta_record_type_def,
         meta_wr_en              => '0'
@@ -164,6 +161,8 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     signal timeout_records  : timeout_records_type := timeout_records_type_def;
     signal pending_timeouts : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
+    signal send_packet_records  : packet_records_type := packet_records_type_def;
+    
     signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
     signal meta_dout            : packet_meta_record_type := packet_meta_record_type_def;
     
@@ -171,10 +170,6 @@ begin
     
     PACKET_OUT          <= cur_reg.packet_out;
     PACKET_OUT_VALID    <= cur_reg.packet_out_valid;
-    
-    RECORDS_INDEX   <= stdulv(next_reg.records_index);
-    RECORDS_DIN     <= cur_reg.records_din;
-    RECORDS_WR_EN   <= cur_reg.records_wr_en;
     
     RESEND_REQUEST_ACK  <= cur_reg.resend_request_ack;
     ACK_ACK             <= cur_reg.ack_ack;
@@ -197,6 +192,18 @@ begin
             
             DOUT    => buf_dout
         );
+    
+    send_records_proc : process(RST, CLK)
+    begin
+        if RST='1' then
+            send_packet_records <= packet_records_type_def;
+        elsif rising_edge(CLK) then
+            SEND_RECORDS_DOUT   <= send_packet_records(int(SEND_RECORDS_INDEX));
+            if cur_reg.send_records_wr_en='1' then
+                send_packet_records(int(cur_reg.send_records_index)) <= cur_reg.send_records_din;
+            end if;
+        end if;
+    end process;
     
     timeout_proc : process(RST, CLK)
         constant timeout_high   : natural := timeout_record_type.timeout'high;
@@ -248,7 +255,7 @@ begin
     end process;
     
     stm_proc : process(RST, cur_reg, buf_dout, meta_dout, pending_timeouts,
-        RECORDS_DOUT, PENDING_RESEND_REQUESTS, SEND, DIN_WR_EN, PENDING_ACKS)
+        PENDING_RESEND_REQUESTS, SEND, DIN_WR_EN, PENDING_ACKS)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
         
@@ -292,7 +299,7 @@ begin
     begin
         r   := cr;
         
-        r.records_wr_en         := '0';
+        r.send_records_wr_en    := '0';
         r.packet_out_valid      := '0';
         r.timeout_ack           := (others => '0');
         r.timeout_start         := (others => '0');
@@ -300,7 +307,6 @@ begin
         r.resend_request_ack    := (others => '0');
         r.ack_ack               := (others => '0');
         r.meta_wr_en            := '0';
-        r.meta_din.is_buffered  := true;
         
         if DIN_WR_EN='1' then
             r.packet_length := cr.packet_length+1;
@@ -311,8 +317,8 @@ begin
             
             when WAITING_FOR_DATA =>
                 r.occupied_buf_slots(int(cr.next_free_buf_index))   := '1';
-                r.buf_rd_addr   := stdulv(cr.next_free_buf_index) & x"00";
-                r.records_index := cr.next_packet_number;
+                r.buf_rd_addr           := stdulv(cr.next_free_buf_index) & x"00";
+                r.send_records_index    := cr.next_packet_number;
                 if pending_timeouts/=(pending_timeouts'range => '0') then
                     r.state := EVALUATING_TIMED_OUT_PACKET_ADDR;
                 end if;
@@ -323,14 +329,6 @@ begin
                     r.state := REMOVING_PACKET_FROM_BUFFER;
                 end if;
                 if SEND='1' then
-                    r.state := CHECKING_FOR_FREE_PACKET_NUMBER;
-                end if;
-            
-            when CHECKING_FOR_FREE_PACKET_NUMBER =>
-                if RECORDS_DOUT.is_buffered then
-                    r.records_index         := cr.next_packet_number+1;
-                    r.next_packet_number    := cr.next_packet_number+1;
-                else
                     r.state := SENDING_DATA_PACKET_MAGIC;
                 end if;
             
@@ -340,9 +338,9 @@ begin
                 r.packet_length             := x"00";
                 r.meta_din.packet_number    := cr.next_packet_number;
                 r.meta_din.packet_length    := cr.packet_length;
-                r.records_index             := cr.next_packet_number;
-                r.records_wr_en             := '1';
-                r.records_din               := (
+                r.send_records_index        := cr.next_packet_number;
+                r.send_records_wr_en        := '1';
+                r.send_records_din          := (
                     is_buffered => true,
                     was_sent    => true,
                     buf_index   => cr.next_free_buf_index
@@ -420,20 +418,22 @@ begin
                 send_packet_byte(meta_dout.checksum, WAITING_FOR_DATA);
             
             when REMOVING_PACKET_FROM_BUFFER =>
+                r.meta_din      := packet_meta_record_type_def;
                 for i in BUFFERED_PACKETS-1 downto 0 loop
                     if PENDING_ACKS(i)='1' then
                         r.packet_index          := uns(i, BUF_INDEX_BITS);
                         r.occupied_buf_slots(i) := '0';
+                        r.meta_wr_en            := '1';
                         r.ack_ack               := (i => '1', others => '0');
                     end if;
                 end loop;
                 r.state := REMOVING_PACKET_FROM_RECORDS;
             
             when REMOVING_PACKET_FROM_RECORDS =>
-                r.records_index := meta_dout.packet_number;
-                r.records_wr_en := '1';
-                r.records_din   := packet_record_type_def;
-                r.state         := WAITING_FOR_DATA;
+                r.send_records_index    := meta_dout.packet_number;
+                r.send_records_wr_en    := '1';
+                r.send_records_din      := packet_record_type_def;
+                r.state                 := WAITING_FOR_DATA;
             
         end case;
         

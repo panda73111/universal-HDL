@@ -34,7 +34,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     signal RESEND_REQUEST_ACK   : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     signal ACK_ACK              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
-    signal RECORDS_DOUT : packet_record_type := packet_record_type_def;
+    signal SEND_RECORDS_DOUT    : packet_record_type := packet_record_type_def;
     
     -- Outputs
     signal DOUT         : std_ulogic_vector(7 downto 0);
@@ -43,9 +43,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     signal PENDING_RESEND_REQUESTS  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
     signal PENDING_ACKS             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
     
-    signal RECORDS_INDEX    : std_ulogic_vector(7 downto 0);
-    signal RECORDS_DIN      : packet_record_type;
-    signal RECORDS_WR_EN    : std_ulogic;
+    signal SEND_RECORDS_INDEX   : std_ulogic_vector(7 downto 0);
     
     signal BUSY : std_ulogic := '0';
     
@@ -55,7 +53,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     -- have one dummy packet in the virtual send buffer
     
     signal send_meta_records    : packet_meta_records_type := (
-        0       => (is_buffered => true, packet_number => x"00", packet_length => x"00", checksum => x"00"),
+        0       => (packet_number => x"00", packet_length => x"00", checksum => x"00"),
         others  => packet_meta_record_type_def
     );
     
@@ -63,8 +61,6 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
         0       => (is_buffered => true, was_sent => true, buf_index => (others => '0')),
         others  => packet_record_type_def
     );
-    
-    signal recv_packet_records  : packet_records_type := packet_records_type_def;
     
 BEGIN
     
@@ -85,10 +81,8 @@ BEGIN
             ACK_ACK         => ACK_ACK,
             PENDING_ACKS    => PENDING_ACKS,
             
-            RECORDS_INDEX   => RECORDS_INDEX,
-            RECORDS_DOUT    => RECORDS_DOUT,
-            RECORDS_DIN     => RECORDS_DIN,
-            RECORDS_WR_EN   => RECORDS_WR_EN,
+            SEND_RECORDS_DOUT   => SEND_RECORDS_DOUT,
+            SEND_RECORDS_INDEX  => SEND_RECORDS_INDEX,
             
             BUSY    => BUSY
         );
@@ -99,16 +93,9 @@ BEGIN
         variable packet_number  : natural range 0 to 255;
     begin
         if RST='1' then
-            recv_packet_records <= packet_records_type_def;
             ACK_ACK             <= (others => '0');
             RESEND_REQUEST_ACK  <= (others => '0');
         elsif rising_edge(CLK) then
-            RECORDS_DOUT    <= send_packet_records(int(RECORDS_INDEX));
-            
-            if RECORDS_WR_EN='1' then
-                recv_packet_records(int(RECORDS_INDEX)) <= RECORDS_DIN;
-            end if;
-            
             ACK_ACK             <= (others => '0');
             RESEND_REQUEST_ACK  <= (others => '0');
             for i in BUFFERED_PACKETS-1 downto 0 loop

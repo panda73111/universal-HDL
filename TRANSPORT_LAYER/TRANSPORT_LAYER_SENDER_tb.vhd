@@ -34,7 +34,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_SENDER_tb IS
     signal PENDING_RESEND_REQUESTS  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     signal PENDING_ACKS             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
-    signal RECORDS_DOUT : packet_record_type := packet_record_type_def;
+    signal SEND_RECORDS_INDEX   : std_ulogic_vector(7 downto 0) := x"00";
     
     -- Outputs
     signal PACKET_OUT       : std_ulogic_vector(7 downto 0);
@@ -43,9 +43,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_SENDER_tb IS
     signal RESEND_REQUEST_ACK   : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
     signal ACK_ACK              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
     
-    signal RECORDS_INDEX    : std_ulogic_vector(7 downto 0);
-    signal RECORDS_DIN      : packet_record_type;
-    signal RECORDS_WR_EN    : std_ulogic;
+    signal SEND_RECORDS_DOUT    : packet_record_type;
     
     signal BUSY : std_ulogic := '0';
     
@@ -72,10 +70,8 @@ BEGIN
             PENDING_ACKS    => PENDING_ACKS,
             ACK_ACK         => ACK_ACK,
             
-            RECORDS_INDEX   => RECORDS_INDEX,
-            RECORDS_DOUT    => RECORDS_DOUT,
-            RECORDS_DIN     => RECORDS_DIN,
-            RECORDS_WR_EN   => RECORDS_WR_EN,
+            SEND_RECORDS_INDEX  => SEND_RECORDS_INDEX,
+            SEND_RECORDS_DOUT   => SEND_RECORDS_DOUT,
             
             BUSY    => BUSY
         );

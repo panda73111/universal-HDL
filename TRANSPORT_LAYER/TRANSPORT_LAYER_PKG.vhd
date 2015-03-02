@@ -33,14 +33,12 @@ package TRANSPORT_LAYER_PKG is
     --- packet meta information records, for resending packets ---
     
     type packet_meta_record_type is record
-        is_buffered     : boolean;
         packet_number   : unsigned(7 downto 0);
         packet_length   : unsigned(7 downto 0);
         checksum        : std_ulogic_vector(7 downto 0);
     end record;
     
     constant packet_meta_record_type_def    : packet_meta_record_type := (
-        is_buffered     => false,
         packet_number   => x"00",
         packet_length   => x"00",
         checksum        => x"00"
