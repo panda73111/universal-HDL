@@ -18,7 +18,7 @@ use work.help_funcs.all;
 
 entity TRANSPORT_LAYER_SENDER is
     generic (
-        TIMEOUT_CYCLES      : positive := 50000 -- 1 ms
+        TIMEOUT_CYCLES      : positive := 5_000_000 -- 100 ms
     );
     port (
         CLK : in std_ulogic;
@@ -34,8 +34,12 @@ entity TRANSPORT_LAYER_SENDER is
         PENDING_RESEND_REQUESTS : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         RESEND_REQUEST_ACK      : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
         
-        PENDING_ACKS    : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        ACK_ACK         : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+        PENDING_RECEIVED_ACKS   : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        ACK_RECEIVED_ACK        : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+        
+        PENDING_ACK_TO_SEND         : in std_ulogic;
+        PENDING_ACK_PACKET_NUMBER   : in std_ulogic_vector(7 downto 0);
+        ACK_SENT                    : out std_ulogic := '0';
         
         SEND_RECORDS_INDEX  : in std_ulogic_vector(7 downto 0);
         SEND_RECORDS_DOUT   : out packet_record_type := packet_record_type_def;
@@ -56,7 +60,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         SENDING_DATA_PACKET_NUMBER,
         SENDING_DATA_PACKET_LENGTH,
         SENDING_DATA_PACKET_PAYLOAD,
-        SENDING_CHECKSUM,
+        SENDING_DATA_PACKET_CHECKSUM,
         EVALUATING_TIMED_OUT_PACKET_ADDR,
         EVALUATING_REQUESTED_TO_RESEND_PACKET_ADDR,
         RESENDING_DATA_PACKET_MAGIC,
@@ -65,7 +69,10 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         RESENDING_DATA_PACKET_PAYLOAD,
         RESENDING_CHECKSUM,
         REMOVING_PACKET_FROM_BUFFER,
-        REMOVING_PACKET_FROM_RECORDS
+        REMOVING_PACKET_FROM_RECORDS,
+        SENDING_ACK_PACKET_MAGIC,
+        SENDING_ACK_PACKET_NUMBER,
+        SENDING_ACK_PACKET_CHECKSUM
     );
     
     type reg_type is record
@@ -81,7 +88,8 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         next_free_slot          : unsigned(BUF_INDEX_BITS-1 downto 0);
         --- resend request and acknowledge handling ---
         resend_request_ack      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        ack_ack                 : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        ack_received_ack        : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        ack_sent                : std_ulogic;
         --- packet buffer ---
         buf_wr_addr             : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
         buf_rd_addr             : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
@@ -111,7 +119,8 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         next_free_slot          => (others => '0'),
         --- resend request and acknowledge handling ---
         resend_request_ack      => (others => '0'),
-        ack_ack                 => (others => '0'),
+        ack_received_ack        => (others => '0'),
+        ack_sent                => '0',
         --- packet buffer ---
         buf_wr_addr             => (others => '0'),
         buf_rd_addr             => (others => '0'),
@@ -172,7 +181,9 @@ begin
     PACKET_OUT_VALID    <= cur_reg.packet_out_valid;
     
     RESEND_REQUEST_ACK  <= cur_reg.resend_request_ack;
-    ACK_ACK             <= cur_reg.ack_ack;
+    ACK_RECEIVED_ACK    <= cur_reg.ack_received_ack;
+    
+    ACK_SENT    <= cur_reg.ack_sent;
     
     BUSY    <= '1' when cur_reg.state/=WAITING_FOR_DATA else '0';
     
@@ -255,7 +266,8 @@ begin
     end process;
     
     stm_proc : process(RST, cur_reg, buf_dout, meta_dout, pending_timeouts,
-        PENDING_RESEND_REQUESTS, SEND, DIN_WR_EN, PENDING_ACKS)
+        PENDING_RESEND_REQUESTS, PENDING_RECEIVED_ACKS,
+        PENDING_ACK_TO_SEND, SEND, DIN_WR_EN, PENDING_ACK_PACKET_NUMBER)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
         
@@ -305,7 +317,8 @@ begin
         r.timeout_start         := (others => '0');
         r.timeout_rst           := (others => '0');
         r.resend_request_ack    := (others => '0');
-        r.ack_ack               := (others => '0');
+        r.ack_received_ack      := (others => '0');
+        r.ack_sent              := '0';
         r.meta_wr_en            := '0';
         
         if DIN_WR_EN='1' then
@@ -325,8 +338,11 @@ begin
                 if PENDING_RESEND_REQUESTS/=(PENDING_RESEND_REQUESTS'range => '0') then
                     r.state := EVALUATING_REQUESTED_TO_RESEND_PACKET_ADDR;
                 end if;
-                if PENDING_ACKS/=(PENDING_ACKS'range => '0') then
+                if PENDING_RECEIVED_ACKS/=(PENDING_RECEIVED_ACKS'range => '0') then
                     r.state := REMOVING_PACKET_FROM_BUFFER;
+                end if;
+                if PENDING_ACK_TO_SEND='1' then
+                    r.state := SENDING_ACK_PACKET_MAGIC;
                 end if;
                 if SEND='1' then
                     r.state := SENDING_DATA_PACKET_MAGIC;
@@ -367,9 +383,9 @@ begin
                 r.buf_rd_addr           := cr.buf_rd_addr+1;
                 r.bytes_left_counter    := cr.bytes_left_counter-1;
                 r.checksum              := cr.checksum+buf_dout;
-                send_packet_byte(buf_dout, SENDING_CHECKSUM, cr.bytes_left_counter(8)='1');
+                send_packet_byte(buf_dout, SENDING_DATA_PACKET_CHECKSUM, cr.bytes_left_counter(8)='1');
             
-            when SENDING_CHECKSUM =>
+            when SENDING_DATA_PACKET_CHECKSUM =>
                 r.timeout_start(int(cr.packet_index))   := '1';
                 r.next_packet_number                    := cr.next_packet_number+1;
                 r.meta_din.checksum                     := cr.checksum;
@@ -379,9 +395,9 @@ begin
             when EVALUATING_TIMED_OUT_PACKET_ADDR =>
                 for i in BUFFERED_PACKETS-1 downto 0 loop
                     if pending_timeouts(i)='1' then
-                        r.packet_index      := uns(i, BUF_INDEX_BITS);
-                        r.buf_rd_addr       := stdulv(i, BUF_INDEX_BITS) & x"00";
-                        r.timeout_ack       := (i => '1', others => '0');
+                        r.packet_index  := uns(i, BUF_INDEX_BITS);
+                        r.buf_rd_addr   := stdulv(i, BUF_INDEX_BITS) & x"00";
+                        r.timeout_ack   := (i => '1', others => '0');
                     end if;
                 end loop;
                 r.state := RESENDING_DATA_PACKET_MAGIC;
@@ -418,13 +434,13 @@ begin
                 send_packet_byte(meta_dout.checksum, WAITING_FOR_DATA);
             
             when REMOVING_PACKET_FROM_BUFFER =>
-                r.meta_din      := packet_meta_record_type_def;
+                r.meta_din  := packet_meta_record_type_def;
                 for i in BUFFERED_PACKETS-1 downto 0 loop
-                    if PENDING_ACKS(i)='1' then
-                        r.packet_index          := uns(i, BUF_INDEX_BITS);
-                        r.occupied_slots(i)     := '0';
-                        r.meta_wr_en            := '1';
-                        r.ack_ack               := (i => '1', others => '0');
+                    if PENDING_RECEIVED_ACKS(i)='1' then
+                        r.packet_index      := uns(i, BUF_INDEX_BITS);
+                        r.occupied_slots(i) := '0';
+                        r.meta_wr_en        := '1';
+                        r.ack_received_ack  := (i => '1', others => '0');
                     end if;
                 end loop;
                 r.state := REMOVING_PACKET_FROM_RECORDS;
@@ -434,6 +450,18 @@ begin
                 r.send_records_wr_en    := '1';
                 r.send_records_din      := packet_record_type_def;
                 r.state                 := WAITING_FOR_DATA;
+            
+            when SENDING_ACK_PACKET_MAGIC =>
+                r.ack_sent  := '1';
+                r.checksum  := ACK_MAGIC;
+                send_packet_byte(ACK_MAGIC, SENDING_ACK_PACKET_NUMBER);
+            
+            when SENDING_ACK_PACKET_NUMBER =>
+                r.checksum  := cr.checksum+PENDING_ACK_PACKET_NUMBER;
+                send_packet_byte(PENDING_ACK_PACKET_NUMBER, SENDING_ACK_PACKET_CHECKSUM);
+            
+            when SENDING_ACK_PACKET_CHECKSUM =>
+                send_packet_byte(cr.checksum, WAITING_FOR_DATA);
             
         end case;
         

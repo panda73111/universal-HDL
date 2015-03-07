@@ -9,7 +9,7 @@
 --  Simple reliable data transfer protocol using acknowledgement and re-sending
 --  of packets. The payload length is up to 256 bytes. The integrity is ensured
 --  by including checksums at the end of each packet. Out-of-order sending is
---  supported.
+--  supported, with a packet span of [BUFFERED_PACKETS].
 --  
 --  data packet format:                       acknowledge packet format:
 --       7      0                                  7      0
@@ -63,30 +63,26 @@ end TRANSPORT_LAYER;
 
 architecture rtl of TRANSPORT_LAYER is
     
-    constant BUF_INDEX_BITS : natural := log2(BUFFERED_PACKETS);
+    signal pending_resend_requests  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    signal resend_request_ack       : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
-    --- packet records, accessed by both state machines ---
+    signal pending_received_acks    : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    signal ack_received_ack         : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
-    signal packet_records       : packet_records_type := packet_records_type_def;
+    signal pending_ack_to_send          : std_ulogic := '0';
+    signal ack_sent                     : std_ulogic := '0';
+    signal pending_ack_packet_number    : std_ulogic_vector(7 downto 0) := x"00";
+    
+    signal send_records_index   : std_ulogic_vector(7 downto 0) := x"00";
     signal send_records_dout    : packet_record_type := packet_record_type_def;
-    signal recv_records_dout    : packet_record_type := packet_record_type_def;
     
     signal sender_busy, receiver_busy   : std_ulogic := '0';
     
 begin
     
-    PACKET_OUT          <= cur_reg.packet_out;
-    PACKET_OUT_VALID    <= cur_reg.packet_out_valid;
-    
-    BUSY    <= '1' when cur_send_reg.state=WAITING_FOR_DATA else '0';
+    BUSY    <= sender_busy or receiver_busy;
     
     TRANSPORT_LAYER_SENDER_inst : entity work.TRANSPORT_LAYER_SENDER
-        generic map (
-            BUFFERED_PACKETS    => BUFFERED_PACKETS,
-            DATA_MAGIC          => DATA_MAGIC,
-            ACK_MAGIC           => ACK_MAGIC,
-            RESEND_MAGIC        => RESEND_MAGIC
-        )
         port map (
             CLK => CLK,
             RST => RST,
@@ -98,20 +94,23 @@ begin
             DIN_WR_EN   => DIN_WR_EN,
             SEND        => SEND,
             
-            PENDING_TIMEOUTS    => pending_timeouts,
-            TIMEOUT_ACK         => timeout_ack,
-            TIMEOUT_START       => timeout_start,
+            PENDING_RESEND_REQUESTS => pending_resend_requests,
+            RESEND_REQUEST_ACK      => resend_request_ack,
+            
+            PENDING_RECEIVED_ACKS   => pending_received_acks,
+            ACK_RECEIVED_ACK        => ack_received_ack,
+            
+            PENDING_ACK_TO_SEND         => pending_ack_to_send,
+            PENDING_ACK_PACKET_NUMBER   => pending_ack_packet_number,
+            ACK_SENT                    => ack_sent,
+            
+            SEND_RECORDS_DOUT   => send_records_dout,
+            SEND_RECORDS_INDEX  => send_records_index,
             
             BUSY    => sender_busy
         );
     
     TRANSPORT_LAYER_RECEIVER_inst : entity work.TRANSPORT_LAYER_RECEIVER
-        generic map (
-            BUFFERED_PACKETS    => BUFFERED_PACKETS,
-            DATA_MAGIC          => DATA_MAGIC,
-            ACK_MAGIC           => ACK_MAGIC,
-            RESEND_MAGIC        => RESEND_MAGIC
-        )
         port map (
             CLK => CLK,
             RST => RST,
@@ -122,25 +121,20 @@ begin
             DOUT        => DOUT,
             DOUT_VALID  => DOUT_VALID,
             
+            PENDING_RESEND_REQUESTS => pending_resend_requests,
+            RESEND_REQUEST_ACK      => resend_request_ack,
+            
+            PENDING_RECEIVED_ACKS   => pending_received_acks,
+            ACK_RECEIVED_ACK        => ack_received_ack,
+            
+            ACK_SENT                    => ack_sent,
+            PENDING_ACK_TO_SEND         => pending_ack_to_send,
+            PENDING_ACK_PACKET_NUMBER   => pending_ack_packet_number,
+            
+            SEND_RECORDS_DOUT   => send_records_dout,
+            SEND_RECORDS_INDEX  => send_records_index,
+            
             BUSY    => receiver_busy
         );
-    
-    packet_records_proc : process(RST, CLK)
-    begin
-        if RST='1' then
-            packet_records  <= packet_records_type_def;
-        elsif rising_edge(CLK) then
-            send_records_dout   <= packet_records(int(cur_send_reg.records_index));
-            recv_records_dout   <= packet_records(int(cur_recv_reg.records_index));
-            
-            if cur_send_reg.records_wr_en='1' then
-                packet_records(int(cur_send_reg.records_index)) <= cur_send_reg.records_din;
-            end if;
-            
-            if cur_recv_reg.records_wr_en='1' then
-                packet_records(int(cur_send_reg.records_index)) <= cur_recv_reg.records_din;
-            end if;
-        end if;
-    end process;
     
 end rtl;

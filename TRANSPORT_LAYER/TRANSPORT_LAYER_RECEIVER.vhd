@@ -30,8 +30,12 @@ entity TRANSPORT_LAYER_RECEIVER is
         RESEND_REQUEST_ACK      : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         PENDING_RESEND_REQUESTS : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
         
-        ACK_ACK         : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        PENDING_ACKS    : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+        ACK_RECEIVED_ACK        : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        PENDING_RECEIVED_ACKS   : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+        
+        ACK_SENT                    : in std_ulogic;
+        PENDING_ACK_TO_SEND         : out std_ulogic := '0';
+        PENDING_ACK_PACKET_NUMBER   : out std_ulogic_vector(7 downto 0) := x"00";
         
         SEND_RECORDS_DOUT   : in packet_record_type;
         SEND_RECORDS_INDEX  : out std_ulogic_vector(7 downto 0) := x"00";
@@ -57,51 +61,55 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     );
     
     type reg_type is record
-        state               : state_type;
-        packet_number       : unsigned(7 downto 0);
-        packet_index        : unsigned(BUF_INDEX_BITS-1 downto 0);
-        bytes_left_counter  : unsigned(8 downto 0);
-        checksum            : std_ulogic_vector(7 downto 0);
-        occupied_slots      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        next_free_slot      : unsigned(BUF_INDEX_BITS-1 downto 0);
-        got_first_packet    : boolean;
+        state                       : state_type;
+        packet_number               : unsigned(7 downto 0);
+        packet_index                : unsigned(BUF_INDEX_BITS-1 downto 0);
+        bytes_left_counter          : unsigned(8 downto 0);
+        checksum                    : std_ulogic_vector(7 downto 0);
+        occupied_slots              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        next_free_slot              : unsigned(BUF_INDEX_BITS-1 downto 0);
+        got_first_packet            : boolean;
         --- resend request and acknowledge handling ---
-        pending_resend_reqs : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        pending_acks        : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        pending_resend_reqs         : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        pending_received_acks       : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        pending_ack_to_send         : std_ulogic;
+        pending_ack_packet_number   : unsigned(7 downto 0);
         --- packet buffer ---
-        buf_wr_en           : std_ulogic;
-        buf_wr_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
+        buf_wr_en                   : std_ulogic;
+        buf_wr_addr                 : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
         --- global packet records ---
-        records_index       : unsigned(7 downto 0);
-        recv_records_din    : packet_record_type;
-        recv_records_wr_en  : std_ulogic;
+        records_index               : unsigned(7 downto 0);
+        recv_records_din            : packet_record_type;
+        recv_records_wr_en          : std_ulogic;
         --- packet meta information records ---
-        meta_din            : packet_meta_record_type;
-        meta_wr_en          : std_ulogic;
+        meta_din                    : packet_meta_record_type;
+        meta_wr_en                  : std_ulogic;
     end record;
     
     constant reg_type_def  : reg_type := (
-        state               => WAITING_FOR_DATA,
-        packet_number       => x"00",
-        packet_index        => (others => '0'),
-        bytes_left_counter  => (others => '0'),
-        checksum            => x"00",
-        occupied_slots      => (others => '0'),
-        next_free_slot      => (others => '0'),
-        got_first_packet    => false,
+        state                       => WAITING_FOR_DATA,
+        packet_number               => x"00",
+        packet_index                => (others => '0'),
+        bytes_left_counter          => (others => '0'),
+        checksum                    => x"00",
+        occupied_slots              => (others => '0'),
+        next_free_slot              => (others => '0'),
+        got_first_packet            => false,
         --- resend request and acknowledge handling ---
-        pending_resend_reqs => (others => '0'),
-        pending_acks        => (others => '0'),
+        pending_resend_reqs         => (others => '0'),
+        pending_received_acks       => (others => '0'),
+        pending_ack_to_send         => '0',
+        pending_ack_packet_number   => x"00",
         --- packet buffer ---
-        buf_wr_en           => '0',
-        buf_wr_addr         => (others => '0'),
+        buf_wr_en                   => '0',
+        buf_wr_addr                 => (others => '0'),
         --- global packet records ---
-        records_index       => x"00",
-        recv_records_din    => packet_record_type_def,
-        recv_records_wr_en  => '0',
+        records_index               => x"00",
+        recv_records_din            => packet_record_type_def,
+        recv_records_wr_en          => '0',
         --- packet meta information records ---
-        meta_din            => packet_meta_record_type_def,
-        meta_wr_en          => '0'
+        meta_din                    => packet_meta_record_type_def,
+        meta_wr_en                  => '0'
     );
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
@@ -153,9 +161,17 @@ begin
     SEND_RECORDS_INDEX  <= stdulv(next_reg.records_index);
     
     PENDING_RESEND_REQUESTS <= cur_reg.pending_resend_reqs;
-    PENDING_ACKS            <= cur_reg.pending_acks;
+    PENDING_RECEIVED_ACKS   <= cur_reg.pending_received_acks;
     
-    BUSY    <= '1' when cur_reg.state/=WAITING_FOR_DATA or cur_readout_reg.state=READING_OUT else '0';
+    PENDING_ACK_TO_SEND         <= cur_reg.pending_ack_to_send;
+    PENDING_ACK_PACKET_NUMBER   <= stdulv(cur_reg.pending_ack_packet_number);
+    
+    BUSY    <= '1' when
+        cur_reg.state/=WAITING_FOR_DATA or
+        cur_readout_reg.state=READING_OUT or
+        cur_reg.pending_resend_reqs/=(cur_reg.pending_resend_reqs'range => '0') or
+        cur_reg.pending_received_acks/=(cur_reg.pending_received_acks'range => '0')
+            else '0';
     
     receive_buf_DUAL_PORT_RAM_inst : entity work.DUAL_PORT_RAM
         generic map (
@@ -251,7 +267,7 @@ begin
     end process;
     
     stm_proc : process(RST, cur_reg, cur_readout_reg,
-        ACK_ACK, RESEND_REQUEST_ACK, PACKET_IN, PACKET_IN_WR_EN, SEND_RECORDS_DOUT)
+        ACK_RECEIVED_ACK, RESEND_REQUEST_ACK, ACK_SENT, PACKET_IN, PACKET_IN_WR_EN, SEND_RECORDS_DOUT)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -263,8 +279,9 @@ begin
         r.recv_records_din.was_sent     := false;
         r.meta_wr_en                    := '0';
         
-        -- high ACK_ACK and RESEND_REQUEST_ACK bits clear high pending_acks and pending_resend_reqs bits
-        r.pending_acks          := cr.pending_acks          and (cr.pending_acks xor ACK_ACK);
+        -- high input bits clear high output bits
+        r.pending_received_acks := cr.pending_received_acks and (cr.pending_received_acks xor ACK_RECEIVED_ACK);
+        r.pending_ack_to_send   := cr.pending_ack_to_send   and (cr.pending_ack_to_send xor ACK_SENT);
         r.pending_resend_reqs   := cr.pending_resend_reqs   and (cr.pending_resend_reqs xor RESEND_REQUEST_ACK);
         
         if cur_readout_reg.packet_rm_en='1' then
@@ -326,9 +343,11 @@ begin
                 end loop;
                 if PACKET_IN_WR_EN='1' then
                     if cr.checksum=PACKET_IN then
-                        r.meta_wr_en            := '1';
-                        r.got_first_packet      := true;
-                        r.recv_records_wr_en    := '1';
+                        r.meta_wr_en                := '1';
+                        r.got_first_packet          := true;
+                        r.recv_records_wr_en        := '1';
+                        r.pending_ack_to_send       := '1';
+                        r.pending_ack_packet_number := cr.packet_number;
                     end if;
                     r.state := WAITING_FOR_DATA;
                 end if;
@@ -347,7 +366,7 @@ begin
                     SEND_RECORDS_DOUT.is_buffered and
                     SEND_RECORDS_DOUT.was_sent
                 then
-                    r.pending_acks(int(SEND_RECORDS_DOUT.buf_index)) := '1';
+                    r.pending_received_acks(int(SEND_RECORDS_DOUT.buf_index)) := '1';
                 end if;
                 r.state     := WAITING_FOR_DATA;
             
