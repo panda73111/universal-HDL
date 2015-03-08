@@ -143,11 +143,14 @@ BEGIN
         
         wait for 100 ns;
         
-        -- test 3: resend the previous packet by timeout
+        -- test 3: resend the previous packet by timeout 10 times
         
         report "Starting test 3";
-        wait until rising_edge(CLK) and BUSY='1';
-        wait until rising_edge(CLK) and BUSY='0';
+        for i in 1 to 10 loop
+            wait until rising_edge(CLK) and BUSY='1';
+            wait until rising_edge(CLK) and BUSY='0';
+        end loop;
+        wait for 100 us;
         
         wait for 100 ns;
         

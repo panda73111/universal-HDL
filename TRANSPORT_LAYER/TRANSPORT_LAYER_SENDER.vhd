@@ -18,7 +18,8 @@ use work.help_funcs.all;
 
 entity TRANSPORT_LAYER_SENDER is
     generic (
-        TIMEOUT_CYCLES      : positive := 5_000_000 -- 100 ms
+        TIMEOUT_CYCLES      : positive := 5_000_000; -- 100 ms
+        MAX_TIMEOUT_RESENDS : positive := 10
     );
     port (
         CLK : in std_ulogic;
@@ -164,14 +165,25 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     constant timeout_records_type_def   : timeout_records_type := (
         others => (
             is_active   => false,
-            timeout     => TIMEOUT_DEF,
+            timeout     => timeout_def,
             buf_addr    => (others => '0')
         )
     );
     
+    type timeout_resend_counters_type is
+        array(0 to BUFFERED_PACKETS-1) of
+        unsigned(log2(MAX_TIMEOUT_RESENDS) downto 0);
+    
+    constant timeout_resend_counter_def :
+        unsigned(log2(MAX_TIMEOUT_RESENDS) downto 0) :=
+        uns(MAX_TIMEOUT_RESENDS-1, log2(MAX_TIMEOUT_RESENDS)+1);
+    
+    signal timeout_resend_counters  : timeout_resend_counters_type := (
+        others => timeout_resend_counter_def
+    );
+    
     signal timeout_records  : timeout_records_type := timeout_records_type_def;
     signal pending_timeouts : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-    
     signal send_packet_records  : packet_records_type := packet_records_type_def;
     
     signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
@@ -233,8 +245,9 @@ begin
         constant timeout_high   : natural := timeout_record_type.timeout'high;
     begin
         if RST='1' then
-            timeout_records     <= timeout_records_type_def;
-            pending_timeouts    <= (others => '0');
+            timeout_records         <= timeout_records_type_def;
+            pending_timeouts        <= (others => '0');
+            timeout_resend_counters <= (others => timeout_resend_counter_def);
         elsif rising_edge(CLK) then
             for i in 0 to BUFFERED_PACKETS-1 loop
                 if timeout_records(i).is_active then
@@ -245,6 +258,7 @@ begin
                         pending_timeouts(i)             <= '1';
                         timeout_records(i).timeout      <= timeout_def;
                         timeout_records(i).is_active    <= false;
+                        timeout_resend_counters(i)      <= timeout_resend_counters(i)-1;
                     end if;
                 end if;
                 
@@ -252,14 +266,18 @@ begin
                     pending_timeouts(i)             <= '0';
                     timeout_records(i).timeout      <= timeout_def;
                     timeout_records(i).is_active    <= false;
+                    timeout_resend_counters(i)      <= timeout_resend_counter_def;
                 end if;
                 
                 if cur_reg.timeout_ack(i)='1' then
-                    -- packet of which the acknowledge timed out was resent
+                    -- packet of which the acknowledge wasn't received in time was resent
                     pending_timeouts(i) <= '0';
                 end if;
                 
-                if cur_reg.timeout_start(i)='1' then
+                if
+                    cur_reg.timeout_start(i)='1' and
+                    timeout_resend_counters(i)(timeout_resend_counters(i)'high)='0'
+                then
                     timeout_records(i).is_active    <= true;
                 end if;
             end loop;
@@ -383,8 +401,8 @@ begin
                 );
                 for i in BUFFERED_PACKETS-1 downto 0 loop
                     if cr.occupied_slots(i)='0' then
-                        r.next_free_slot        := uns(i, BUF_INDEX_BITS);
-                        r.buf_wr_addr           := stdulv(i, BUF_INDEX_BITS) & x"00";
+                        r.next_free_slot    := uns(i, BUF_INDEX_BITS);
+                        r.buf_wr_addr       := stdulv(i, BUF_INDEX_BITS) & x"00";
                     end if;
                 end loop;
                 send_packet_byte(DATA_MAGIC, SENDING_DATA_PACKET_NUMBER);
@@ -461,6 +479,7 @@ begin
                         r.occupied_slots(i) := '0';
                         r.meta_wr_en        := '1';
                         r.ack_received_ack  := (i => '1', others => '0');
+                        r.timeout_rst       := (i => '1', others => '0');
                     end if;
                 end loop;
                 r.state := REMOVING_PACKET_FROM_RECORDS;
