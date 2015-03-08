@@ -127,10 +127,10 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     
     type readout_state_type is (
         WAITING_FOR_FIRST_PACKET,
+        WAITING_FOR_NEXT_PACKET,
         GETTING_PACKET_LENGTH,
         READING_OUT,
-        INCREMENTING_PACKET_NUMBER,
-        WAITING_FOR_NEXT_PACKET
+        INCREMENTING_PACKET_NUMBER
     );
     
     type readout_reg_type is record
@@ -232,18 +232,26 @@ begin
             
             when WAITING_FOR_FIRST_PACKET =>
                 if cur_reg.got_first_packet then
+                    r.state := WAITING_FOR_NEXT_PACKET;
+                end if;
+            
+            when WAITING_FOR_NEXT_PACKET =>
+                r.buf_rd_addr   := stdulv(recv_records_dout.buf_index) & x"00";
+                r.slot_index    := recv_records_dout.buf_index;
+                if recv_records_dout.is_buffered then
                     r.state := GETTING_PACKET_LENGTH;
                 end if;
             
             when GETTING_PACKET_LENGTH =>
-                r.bytes_left_to_read    := ("0" & meta_dout.packet_length)-2;
+                r.bytes_left_to_read    := ("0" & meta_dout.packet_length)-1;
                 r.state                 := READING_OUT;
             
             when READING_OUT =>
-                r.dout_valid          := '1';
                 r.buf_rd_addr         := cr.buf_rd_addr+1;
                 r.bytes_left_to_read  := cr.bytes_left_to_read-1;
-                if cr.bytes_left_to_read(8)='1' then
+                if cr.bytes_left_to_read(8)='0' then
+                    r.dout_valid          := '1';
+                else
                     -- finished reading one packet, remove it from the buffer
                     r.packet_rm_en  := '1';
                     r.state         := INCREMENTING_PACKET_NUMBER;
@@ -252,13 +260,6 @@ begin
             when INCREMENTING_PACKET_NUMBER =>
                 r.packet_number := cr.packet_number+1;
                 r.state         := WAITING_FOR_NEXT_PACKET;
-            
-            when WAITING_FOR_NEXT_PACKET =>
-                r.buf_rd_addr   := stdulv(recv_records_dout.buf_index) & x"00";
-                r.slot_index    := recv_records_dout.buf_index;
-                if recv_records_dout.is_buffered then
-                    r.state := GETTING_PACKET_LENGTH;
-                end if;
             
         end case;
         
@@ -364,35 +365,41 @@ begin
             
             when GETTING_ACK_PACKET_NUMBER =>
                 r.packet_number := uns(PACKET_IN);
-                r.checksum      := cr.checksum+PACKET_IN;
                 r.records_index := uns(PACKET_IN);
                 if PACKET_IN_WR_EN='1' then
-                    r.state := COMPARING_ACK_CHECKSUM;
+                    r.checksum  := cr.checksum+PACKET_IN;
+                    r.state     := COMPARING_ACK_CHECKSUM;
                 end if;
             
             when COMPARING_ACK_CHECKSUM =>
-                if
-                    cr.checksum=PACKET_IN and
-                    SEND_RECORDS_DOUT.is_buffered
-                then
-                    r.pending_received_acks(int(SEND_RECORDS_DOUT.buf_index)) := '1';
+                if PACKET_IN_WR_EN='1' then
+                    if
+                        cr.checksum=PACKET_IN and
+                        SEND_RECORDS_DOUT.is_buffered
+                    then
+                        r.pending_received_acks(int(SEND_RECORDS_DOUT.buf_index)) := '1';
+                    end if;
+                    r.state     := WAITING_FOR_DATA;
                 end if;
-                r.state     := WAITING_FOR_DATA;
             
             when GETTING_RESEND_PACKET_NUMBER =>
                 r.packet_number := uns(PACKET_IN);
-                r.checksum      := cr.checksum+PACKET_IN;
                 r.records_index := uns(PACKET_IN);
-                r.state         := COMPARING_RESEND_CHECKSUM;
+                if PACKET_IN_WR_EN='1' then
+                    r.checksum  := cr.checksum+PACKET_IN;
+                    r.state     := COMPARING_RESEND_CHECKSUM;
+                end if;
             
             when COMPARING_RESEND_CHECKSUM =>
-                if
-                    cr.checksum=PACKET_IN and
-                    SEND_RECORDS_DOUT.is_buffered
-                then
-                    r.pending_resend_reqs(int(SEND_RECORDS_DOUT.buf_index))  := '1';
+                if PACKET_IN_WR_EN='1' then
+                    if
+                        cr.checksum=PACKET_IN and
+                        SEND_RECORDS_DOUT.is_buffered
+                    then
+                        r.pending_resend_reqs(int(SEND_RECORDS_DOUT.buf_index))  := '1';
+                    end if;
+                    r.state := WAITING_FOR_DATA;
                 end if;
-                r.state := WAITING_FOR_DATA;
             
         end case;
         
