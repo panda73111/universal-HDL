@@ -29,19 +29,25 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_SENDER_tb IS
     
     signal DIN          : std_ulogic_vector(7 downto 0) := x"00";
     signal DIN_WR_EN    : std_ulogic := '0';
-    signal SEND         : std_ulogic := '0';
+    signal SEND_PACKET  : std_ulogic := '0';
     
     signal PENDING_RESEND_REQUESTS  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-    signal PENDING_ACKS             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    signal PENDING_RECEIVED_ACKS    : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    
+    signal PENDING_ACK_TO_SEND          : std_ulogic := '0';
+    signal PENDING_ACK_PACKET_NUMBER    : std_ulogic_vector(7 downto 0) := x"00";
     
     signal SEND_RECORDS_INDEX   : std_ulogic_vector(7 downto 0) := x"00";
     
     -- Outputs
     signal PACKET_OUT       : std_ulogic_vector(7 downto 0);
     signal PACKET_OUT_VALID : std_ulogic;
+    signal PACKET_OUT_END   : std_ulogic;
     
     signal RESEND_REQUEST_ACK   : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-    signal ACK_ACK              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+    signal ACK_RECEIVED_ACK     : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+    
+    signal ACK_SENT : std_ulogic;
     
     signal SEND_RECORDS_DOUT    : packet_record_type;
     
@@ -59,16 +65,21 @@ BEGIN
             
             PACKET_OUT          => PACKET_OUT,
             PACKET_OUT_VALID    => PACKET_OUT_VALID,
+            PACKET_OUT_END      => PACKET_OUT_END,
             
             DIN         => DIN,
             DIN_WR_EN   => DIN_WR_EN,
-            SEND        => SEND,
+            SEND_PACKET => SEND_PACKET,
             
             PENDING_RESEND_REQUESTS => PENDING_RESEND_REQUESTS,
             RESEND_REQUEST_ACK      => RESEND_REQUEST_ACK,
             
-            PENDING_ACKS    => PENDING_ACKS,
-            ACK_ACK         => ACK_ACK,
+            PENDING_RECEIVED_ACKS   => PENDING_RECEIVED_ACKS,
+            ACK_RECEIVED_ACK        => ACK_RECEIVED_ACK,
+            
+            PENDING_ACK_TO_SEND         => PENDING_ACK_TO_SEND,
+            PENDING_ACK_PACKET_NUMBER   => PENDING_ACK_PACKET_NUMBER,
+            ACK_SENT                    => ACK_SENT,
             
             SEND_RECORDS_INDEX  => SEND_RECORDS_INDEX,
             SEND_RECORDS_DOUT   => SEND_RECORDS_DOUT,
@@ -89,9 +100,9 @@ BEGIN
                 wait until rising_edge(CLK);
             end loop;
             DIN_WR_EN   <= '0';
-            SEND        <= '1';
+            SEND_PACKET <= '1';
             wait until rising_edge(CLK);
-            SEND    <= '0';
+            SEND_PACKET <= '0';
             wait until rising_edge(CLK) and BUSY='0';
         end procedure;
         
@@ -105,9 +116,9 @@ BEGIN
         
         procedure acknowledge(buf_i : in natural) is
         begin
-            PENDING_ACKS(buf_i) <= '1';
-            wait until rising_edge(CLK) and ACK_ACK(buf_i)='1';
-            PENDING_ACKS(buf_i) <= '0';
+            PENDING_RECEIVED_ACKS(buf_i) <= '1';
+            wait until rising_edge(CLK) and ACK_RECEIVED_ACK(buf_i)='1';
+            PENDING_RECEIVED_ACKS(buf_i) <= '0';
             wait until rising_edge(CLK) and BUSY='0';
         end procedure;
         
@@ -116,7 +127,7 @@ BEGIN
         wait for 100 ns;
         RST <= '0';
         wait for 100 ns;
-        wait until rising_edge(CLK);
+        wait until rising_edge(CLK) and BUSY='0';
         
         -- test 1: send a 128 byte packet
         

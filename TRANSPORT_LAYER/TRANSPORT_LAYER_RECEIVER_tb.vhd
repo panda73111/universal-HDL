@@ -32,7 +32,9 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     signal PACKET_IN_WR_EN  : std_ulogic := '0';
     
     signal RESEND_REQUEST_ACK   : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-    signal ACK_ACK              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    signal ACK_RECEIVED_ACK     : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
+    
+    signal ACK_SENT : std_ulogic := '0';
     
     signal SEND_RECORDS_DOUT    : packet_record_type := packet_record_type_def;
     
@@ -41,7 +43,10 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     signal DOUT_VALID   : std_ulogic;
     
     signal PENDING_RESEND_REQUESTS  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-    signal PENDING_ACKS             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+    signal PENDING_RECEIVED_ACKS    : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+    
+    signal PENDING_ACK_TO_SEND          : std_ulogic;
+    signal PENDING_ACK_PACKET_NUMBER    : std_ulogic_vector(7 downto 0);
     
     signal SEND_RECORDS_INDEX   : std_ulogic_vector(7 downto 0);
     
@@ -58,8 +63,8 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     );
     
     signal send_packet_records  : packet_records_type := (
-        0       => (is_buffered => true, was_sent => true, buf_index => (others => '0')),
-        others  => packet_record_type_def
+        0       => (1 downto 0 => '1', others => '0'),
+        others  => (others => '0')
     );
     
 BEGIN
@@ -78,8 +83,12 @@ BEGIN
             RESEND_REQUEST_ACK      => RESEND_REQUEST_ACK,
             PENDING_RESEND_REQUESTS => PENDING_RESEND_REQUESTS,
             
-            ACK_ACK         => ACK_ACK,
-            PENDING_ACKS    => PENDING_ACKS,
+            ACK_RECEIVED_ACK        => ACK_RECEIVED_ACK,
+            PENDING_RECEIVED_ACKS   => PENDING_RECEIVED_ACKS,
+            
+            ACK_SENT                    => ACK_SENT,
+            PENDING_ACK_TO_SEND         => PENDING_ACK_TO_SEND,
+            PENDING_ACK_PACKET_NUMBER   => PENDING_ACK_PACKET_NUMBER,
             
             SEND_RECORDS_DOUT   => SEND_RECORDS_DOUT,
             SEND_RECORDS_INDEX  => SEND_RECORDS_INDEX,
@@ -93,17 +102,17 @@ BEGIN
         variable packet_number  : natural range 0 to 255;
     begin
         if RST='1' then
-            ACK_ACK             <= (others => '0');
+            ACK_RECEIVED_ACK    <= (others => '0');
             RESEND_REQUEST_ACK  <= (others => '0');
         elsif rising_edge(CLK) then
-            ACK_ACK             <= (others => '0');
+            ACK_RECEIVED_ACK    <= (others => '0');
             RESEND_REQUEST_ACK  <= (others => '0');
             for i in BUFFERED_PACKETS-1 downto 0 loop
-                if PENDING_ACKS(i)='1' then
+                if PENDING_RECEIVED_ACKS(i)='1' then
                     -- remove the acknowledged packet from the virtual send buffer
                     packet_number   := int(send_meta_records(i).packet_number);
-                    send_packet_records(packet_number)  <= packet_record_type_def;
-                    ACK_ACK(i)  <= '1';
+                    send_packet_records(packet_number)  <= (others => '0');
+                    ACK_RECEIVED_ACK(i) <= '1';
                 end if;
                 if PENDING_RESEND_REQUESTS(i)='1' then
                     packet_number   := int(send_meta_records(i).packet_number);
@@ -197,7 +206,7 @@ BEGIN
         wait for 100 ns;
         RST <= '0';
         wait for 100 ns;
-        wait until rising_edge(CLK);
+        wait until rising_edge(CLK) and BUSY='0';
         
         -- test 1: receive a 128 byte packet
         

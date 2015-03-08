@@ -49,15 +49,16 @@ entity TRANSPORT_LAYER is
         
         PACKET_OUT          : out std_ulogic_vector(7 downto 0) := x"00";
         PACKET_OUT_VALID    : out std_ulogic := '0';
+        PACKET_OUT_END      : out std_ulogic := '0';
         
         DIN         : in std_ulogic_vector(7 downto 0);
         DIN_WR_EN   : in std_ulogic;
-        SEND        : in std_ulogic;
+        SEND_PACKET : in std_ulogic;
         
         DOUT        : out std_ulogic_vector(7 downto 0) := x"00";
         DOUT_VALID  : out std_ulogic := '0';
         
-        BUSY    : out std_ulogic := '0'
+        BUSY    : out std_ulogic := '1'
     );
 end TRANSPORT_LAYER;
 
@@ -89,10 +90,11 @@ begin
             
             PACKET_OUT          => PACKET_OUT,
             PACKET_OUT_VALID    => PACKET_OUT_VALID,
+            PACKET_OUT_END      => PACKET_OUT_END,
             
             DIN         => DIN,
             DIN_WR_EN   => DIN_WR_EN,
-            SEND        => SEND,
+            SEND_PACKET => SEND_PACKET,
             
             PENDING_RESEND_REQUESTS => pending_resend_requests,
             RESEND_REQUEST_ACK      => resend_request_ack,

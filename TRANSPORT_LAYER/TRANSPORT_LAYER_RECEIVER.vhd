@@ -40,7 +40,7 @@ entity TRANSPORT_LAYER_RECEIVER is
         SEND_RECORDS_DOUT   : in packet_record_type;
         SEND_RECORDS_INDEX  : out std_ulogic_vector(7 downto 0) := x"00";
         
-        BUSY    : out std_ulogic := '0'
+        BUSY    : out std_ulogic := '1'
     );
 end TRANSPORT_LAYER_RECEIVER;
 
@@ -49,6 +49,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     constant BUF_INDEX_BITS : natural := log2(BUFFERED_PACKETS);
     
     type state_type is (
+        CLEARING_RECORDS,
         WAITING_FOR_DATA,
         GETTING_DATA_PACKET_NUMBER,
         GETTING_DATA_LENGTH,
@@ -87,7 +88,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     end record;
     
     constant reg_type_def  : reg_type := (
-        state                       => WAITING_FOR_DATA,
+        state                       => CLEARING_RECORDS,
         packet_number               => x"00",
         packet_index                => (others => '0'),
         bytes_left_counter          => (others => '0'),
@@ -128,6 +129,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         WAITING_FOR_FIRST_PACKET,
         GETTING_PACKET_LENGTH,
         READING_OUT,
+        INCREMENTING_PACKET_NUMBER,
         WAITING_FOR_NEXT_PACKET
     );
     
@@ -135,7 +137,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         state               : readout_state_type;
         dout_valid          : std_ulogic;
         buf_rd_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
-        next_packet_number  : unsigned(7 downto 0);
+        packet_number       : unsigned(7 downto 0);
         bytes_left_to_read  : unsigned(8 downto 0);
         slot_index          : unsigned(BUF_INDEX_BITS-1 downto 0);
         packet_rm_en        : std_ulogic;
@@ -145,7 +147,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         state               => WAITING_FOR_FIRST_PACKET,
         dout_valid          => '0',
         buf_rd_addr         => (others => '0'),
-        next_packet_number  => x"00",
+        packet_number       => x"00",
         bytes_left_to_read  => (others => '0'),
         slot_index          => (others => '0'),
         packet_rm_en        => '0'
@@ -189,17 +191,15 @@ begin
             DOUT    => buf_dout
         );
     
-    recv_records_proc : process(RST, CLK)
+    recv_records_proc : process(CLK)
     begin
-        if RST='1' then
-            recv_packet_records <= packet_records_type_def;
-        elsif rising_edge(CLK) then
-            recv_records_dout   <= recv_packet_records(int(next_readout_reg.next_packet_number));
+        if rising_edge(CLK) then
+            recv_records_dout   <= vector_to_packet_record_type(recv_packet_records(int(next_readout_reg.packet_number)));
             if cur_reg.recv_records_wr_en='1' then
-                recv_packet_records(int(cur_reg.records_index)) <= cur_reg.recv_records_din;
+                recv_packet_records(int(cur_reg.records_index)) <= packet_record_type_to_vector(cur_reg.recv_records_din);
             end if;
-            if cur_readout_reg.packet_rm_en='1' then
-                recv_packet_records(int(meta_dout.packet_number))   <= packet_record_type_def;
+            if next_readout_reg.packet_rm_en='1' then
+                recv_packet_records(int(next_readout_reg.packet_number))   <= packet_record_type_to_vector(packet_record_type_def);
             end if;
         end if;
     end process;
@@ -219,7 +219,7 @@ begin
         end if;
     end process;
     
-    readout_stm_proc : process(RST, cur_readout_reg, meta_dout, recv_records_dout)
+    readout_stm_proc : process(RST, cur_reg, cur_readout_reg, meta_dout, recv_records_dout)
         alias cr is cur_readout_reg;
         variable r  : readout_reg_type := readout_reg_type_def;
     begin
@@ -245,10 +245,13 @@ begin
                 r.bytes_left_to_read  := cr.bytes_left_to_read-1;
                 if cr.bytes_left_to_read(8)='1' then
                     -- finished reading one packet, remove it from the buffer
-                    r.packet_rm_en          := '1';
-                    r.next_packet_number    := cr.next_packet_number+1;
-                    r.state                 := WAITING_FOR_NEXT_PACKET;
+                    r.packet_rm_en  := '1';
+                    r.state         := INCREMENTING_PACKET_NUMBER;
                 end if;
+            
+            when INCREMENTING_PACKET_NUMBER =>
+                r.packet_number := cr.packet_number+1;
+                r.state         := WAITING_FOR_NEXT_PACKET;
             
             when WAITING_FOR_NEXT_PACKET =>
                 r.buf_rd_addr   := stdulv(recv_records_dout.buf_index) & x"00";
@@ -273,10 +276,9 @@ begin
     begin
         r   := cr;
         
-        r.recv_records_wr_en            := '0';
         r.buf_wr_en                     := '0';
+        r.recv_records_wr_en            := '0';
         r.recv_records_din.is_buffered  := true;
-        r.recv_records_din.was_sent     := false;
         r.meta_wr_en                    := '0';
         
         -- high input bits clear high output bits
@@ -289,6 +291,14 @@ begin
         end if;
         
         case cr.state is
+            
+            when CLEARING_RECORDS =>
+                r.records_index         := cr.records_index+1;
+                r.recv_records_din      := packet_record_type_def;
+                r.recv_records_wr_en    := '1';
+                if cr.records_index=uns(255, 8) then
+                    r.state := WAITING_FOR_DATA;
+                end if;
             
             when WAITING_FOR_DATA =>
                 r.occupied_slots(int(cr.next_free_slot))    := '1';
@@ -363,8 +373,7 @@ begin
             when COMPARING_ACK_CHECKSUM =>
                 if
                     cr.checksum=PACKET_IN and
-                    SEND_RECORDS_DOUT.is_buffered and
-                    SEND_RECORDS_DOUT.was_sent
+                    SEND_RECORDS_DOUT.is_buffered
                 then
                     r.pending_received_acks(int(SEND_RECORDS_DOUT.buf_index)) := '1';
                 end if;
@@ -379,8 +388,7 @@ begin
             when COMPARING_RESEND_CHECKSUM =>
                 if
                     cr.checksum=PACKET_IN and
-                    SEND_RECORDS_DOUT.is_buffered and
-                    SEND_RECORDS_DOUT.was_sent
+                    SEND_RECORDS_DOUT.is_buffered
                 then
                     r.pending_resend_reqs(int(SEND_RECORDS_DOUT.buf_index))  := '1';
                 end if;

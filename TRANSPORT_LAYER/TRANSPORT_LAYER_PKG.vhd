@@ -12,23 +12,40 @@ package TRANSPORT_LAYER_PKG is
     
     type packet_record_type is record
         is_buffered : boolean;
-        was_sent    : boolean;
         buf_index   : unsigned(log2(BUFFERED_PACKETS)-1 downto 0);
     end record;
     
     constant packet_record_type_def : packet_record_type := (
         is_buffered => false,
-        was_sent    => false,
         buf_index   => (others => '0')
     );
     
     type packet_records_type is
         array(0 to 255) of
-        packet_record_type;
+        std_ulogic_vector(log2(BUFFERED_PACKETS) downto 0);
     
     constant packet_records_type_def    : packet_records_type := (
-        others => packet_record_type_def
+        others => (others => '0')
     );
+    
+    function packet_record_type_to_vector(d : in packet_record_type) return std_ulogic_vector is
+        variable v  : std_ulogic_vector(log2(BUFFERED_PACKETS) downto 0);
+    begin
+        v   := (others => '0');
+        if d.is_buffered then
+            v(0)    := '1';
+        end if;
+        v(v'high downto 1)  := stdulv(d.buf_index);
+        return v;
+    end function;
+    
+    function vector_to_packet_record_type(v : in std_ulogic_vector) return packet_record_type is
+        variable d  : packet_record_type;
+    begin
+        d.is_buffered   := v(0)='1';
+        d.buf_index     := uns(v(v'high downto 1));
+        return d;
+    end function;
     
     --- packet meta information records, for resending packets ---
     

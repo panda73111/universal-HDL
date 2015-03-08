@@ -30,7 +30,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_tb IS
     
     signal DIN          : std_ulogic_vector(7 downto 0) := x"00";
     signal DIN_WR_EN    : std_ulogic := '0';
-    signal SEND         : std_ulogic := '0';
+    signal SEND_PACKET  : std_ulogic := '0';
     
     signal PACKET_IN        : std_ulogic_vector(7 downto 0) := x"00";
     signal PACKET_IN_WR_EN  : std_ulogic := '0';
@@ -38,6 +38,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_tb IS
     -- Outputs
     signal PACKET_OUT       : std_ulogic_vector(7 downto 0);
     signal PACKET_OUT_VALID : std_ulogic;
+    signal PACKET_OUT_END   : std_ulogic;
     
     signal DOUT         : std_ulogic_vector(7 downto 0);
     signal DOUT_VALID   : std_ulogic;
@@ -59,10 +60,11 @@ BEGIN
             
             PACKET_OUT          => PACKET_OUT,
             PACKET_OUT_VALID    => PACKET_OUT_VALID,
+            PACKET_OUT_END      => PACKET_OUT_END,
             
             DIN         => DIN,
             DIN_WR_EN   => DIN_WR_EN,
-            SEND        => SEND,
+            SEND_PACKET => SEND_PACKET,
             
             DOUT        => DOUT,
             DOUT_VALID  => DOUT_VALID,
@@ -83,9 +85,9 @@ BEGIN
                 wait until rising_edge(CLK);
             end loop;
             DIN_WR_EN   <= '0';
-            SEND        <= '1';
+            SEND_PACKET <= '1';
             wait until rising_edge(CLK);
-            SEND    <= '0';
+            SEND_PACKET <= '0';
             wait until rising_edge(CLK) and BUSY='0';
         end procedure;
         
@@ -169,7 +171,9 @@ BEGIN
         wait for 100 ns;
         RST <= '0';
         wait for 100 ns;
-        wait until rising_edge(CLK);
+        wait until rising_edge(CLK) and BUSY='0';
+        
+        wait for 100 ns;
         
         -- test 1: receive a 128 byte packet
         
