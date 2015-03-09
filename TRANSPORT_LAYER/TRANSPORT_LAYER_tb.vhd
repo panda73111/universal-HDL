@@ -220,6 +220,20 @@ BEGIN
         
         wait for 100 ns;
         
+        -- test 5: receive 8 identical packets
+        
+        report "Starting test 5";
+        receive_data_packet(9);
+        receive_data_packet(9);
+        receive_data_packet(9);
+        receive_data_packet(9);
+        receive_data_packet(9);
+        receive_data_packet(9);
+        receive_data_packet(9);
+        receive_data_packet(9);
+        
+        wait for 100 ns;
+        
         report "NONE. All tests finished successfully."
             severity FAILURE;
     end process;

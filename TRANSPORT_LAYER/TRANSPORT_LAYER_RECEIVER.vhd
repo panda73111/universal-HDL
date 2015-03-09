@@ -117,8 +117,9 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     
     signal buf_dout : std_ulogic_vector(7 downto 0) := x"00";
     
-    signal recv_packet_records  : packet_records_type := packet_records_type_def;
-    signal recv_records_dout    : packet_record_type := packet_record_type_def;
+    signal recv_packet_records          : packet_records_type := packet_records_type_def;
+    signal recv_records_readout_dout    : packet_record_type := packet_record_type_def;
+    signal recv_records_dout            : packet_record_type := packet_record_type_def;
     
     signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
     signal meta_dout            : packet_meta_record_type := packet_meta_record_type_def;
@@ -194,7 +195,8 @@ begin
     recv_records_proc : process(CLK)
     begin
         if rising_edge(CLK) then
-            recv_records_dout   <= vector_to_packet_record_type(recv_packet_records(int(next_readout_reg.packet_number)));
+            recv_records_dout           <= vector_to_packet_record_type(recv_packet_records(int(cur_reg.records_index)));
+            recv_records_readout_dout   <= vector_to_packet_record_type(recv_packet_records(int(next_readout_reg.packet_number)));
             if cur_reg.recv_records_wr_en='1' then
                 recv_packet_records(int(cur_reg.records_index)) <= packet_record_type_to_vector(cur_reg.recv_records_din);
             end if;
@@ -219,7 +221,7 @@ begin
         end if;
     end process;
     
-    readout_stm_proc : process(RST, cur_reg, cur_readout_reg, meta_dout, recv_records_dout)
+    readout_stm_proc : process(RST, cur_reg, cur_readout_reg, meta_dout, recv_records_readout_dout)
         alias cr is cur_readout_reg;
         variable r  : readout_reg_type := readout_reg_type_def;
     begin
@@ -236,9 +238,9 @@ begin
                 end if;
             
             when WAITING_FOR_NEXT_PACKET =>
-                r.buf_rd_addr   := stdulv(recv_records_dout.buf_index) & x"00";
-                r.slot_index    := recv_records_dout.buf_index;
-                if recv_records_dout.is_buffered then
+                r.buf_rd_addr   := stdulv(recv_records_readout_dout.buf_index) & x"00";
+                r.slot_index    := recv_records_readout_dout.buf_index;
+                if recv_records_readout_dout.is_buffered then
                     r.state := GETTING_PACKET_LENGTH;
                 end if;
             
@@ -270,7 +272,7 @@ begin
         next_readout_reg    <= r;
     end process;
     
-    stm_proc : process(RST, cur_reg, cur_readout_reg,
+    stm_proc : process(RST, cur_reg, cur_readout_reg, recv_records_dout,
         ACK_RECEIVED_ACK, RESEND_REQUEST_ACK, ACK_SENT, PACKET_IN, PACKET_IN_WR_EN, SEND_RECORDS_DOUT)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
@@ -346,14 +348,17 @@ begin
                 end if;
             
             when COMPARING_DATA_CHECKSUM =>
-                for i in BUFFERED_PACKETS-1 downto 0 loop
-                    if cr.occupied_slots(i)='0' then
-                        r.next_free_slot        := uns(i, BUF_INDEX_BITS);
-                        r.buf_wr_addr           := stdulv(i, BUF_INDEX_BITS) & x"00";
-                    end if;
-                end loop;
                 if PACKET_IN_WR_EN='1' then
-                    if cr.checksum=PACKET_IN then
+                    if
+                        cr.checksum=PACKET_IN and
+                        not recv_records_dout.is_buffered
+                    then
+                        for i in BUFFERED_PACKETS-1 downto 0 loop
+                            if cr.occupied_slots(i)='0' then
+                                r.next_free_slot        := uns(i, BUF_INDEX_BITS);
+                                r.buf_wr_addr           := stdulv(i, BUF_INDEX_BITS) & x"00";
+                            end if;
+                        end loop;
                         r.meta_wr_en                := '1';
                         r.got_first_packet          := true;
                         r.recv_records_wr_en        := '1';
