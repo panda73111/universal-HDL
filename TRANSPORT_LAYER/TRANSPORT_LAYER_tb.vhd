@@ -234,6 +234,16 @@ BEGIN
         
         wait for 100 ns;
         
+        -- test 6: try sending an empty packet
+        
+        report "Starting test 6";
+        SEND_PACKET <= '1';
+        wait until rising_edge(CLK);
+        SEND_PACKET <= '0';
+        wait until rising_edge(CLK) and BUSY='0';
+        
+        wait for 100 ns;
+        
         report "NONE. All tests finished successfully."
             severity FAILURE;
     end process;

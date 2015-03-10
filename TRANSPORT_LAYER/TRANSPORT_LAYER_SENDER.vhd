@@ -383,7 +383,7 @@ begin
                 if PENDING_ACK_TO_SEND='1' then
                     r.state := SENDING_ACK_PACKET_MAGIC;
                 end if;
-                if SEND_PACKET='1' then
+                if SEND_PACKET='1' and cr.packet_length/=uns(0, 8) then
                     r.state := SENDING_DATA_PACKET_MAGIC;
                 end if;
             
