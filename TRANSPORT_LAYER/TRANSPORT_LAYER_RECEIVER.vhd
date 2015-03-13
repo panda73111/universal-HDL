@@ -140,7 +140,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         buf_rd_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
         packet_number       : unsigned(7 downto 0);
         bytes_left_to_read  : unsigned(8 downto 0);
-        slot_index          : unsigned(BUF_INDEX_BITS-1 downto 0);
+        slot                : unsigned(BUF_INDEX_BITS-1 downto 0);
         packet_rm_en        : std_ulogic;
     end record;
     
@@ -150,7 +150,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         buf_rd_addr         => (others => '0'),
         packet_number       => x"00",
         bytes_left_to_read  => (others => '0'),
-        slot_index          => (others => '0'),
+        slot                => (others => '0'),
         packet_rm_en        => '0'
     );
     
@@ -211,12 +211,12 @@ begin
         if RST='1' then
             packet_meta_records <= packet_meta_records_type_def;
         elsif rising_edge(CLK) then
-            meta_dout   <= packet_meta_records(int(next_readout_reg.slot_index));
+            meta_dout   <= packet_meta_records(int(next_readout_reg.slot));
             if cur_reg.meta_wr_en='1' then
                 packet_meta_records(int(cur_reg.packet_index))  <= cur_reg.meta_din;
             end if;
             if cur_readout_reg.packet_rm_en='1' then
-                packet_meta_records(int(cur_readout_reg.slot_index))    <= packet_meta_record_type_def;
+                packet_meta_records(int(cur_readout_reg.slot))    <= packet_meta_record_type_def;
             end if;
         end if;
     end process;
@@ -238,8 +238,8 @@ begin
                 end if;
             
             when WAITING_FOR_NEXT_PACKET =>
-                r.buf_rd_addr   := stdulv(recv_records_readout_dout.buf_index) & x"00";
-                r.slot_index    := recv_records_readout_dout.buf_index;
+                r.buf_rd_addr   := stdulv(recv_records_readout_dout.slot) & x"00";
+                r.slot          := recv_records_readout_dout.slot;
                 if recv_records_readout_dout.is_buffered then
                     r.state := GETTING_PACKET_LENGTH;
                 end if;
@@ -290,7 +290,7 @@ begin
         r.pending_resend_reqs   := cr.pending_resend_reqs   and (cr.pending_resend_reqs xor RESEND_REQUEST_ACK);
         
         if cur_readout_reg.packet_rm_en='1' then
-            r.occupied_slots(int(cur_readout_reg.slot_index))   := '0';
+            r.occupied_slots(int(cur_readout_reg.slot)) := '0';
         end if;
         
         case cr.state is
@@ -305,10 +305,10 @@ begin
             
             when WAITING_FOR_DATA =>
                 r.occupied_slots(int(cr.next_free_slot))    := '1';
-                r.records_index                 := cr.packet_number;
-                r.packet_index                  := cr.next_free_slot;
-                r.recv_records_din.buf_index    := cr.next_free_slot;
-                r.checksum                      := PACKET_IN;
+                r.records_index         := cr.packet_number;
+                r.packet_index          := cr.next_free_slot;
+                r.recv_records_din.slot := cr.next_free_slot;
+                r.checksum              := PACKET_IN;
                 if PACKET_IN_WR_EN='1' then
                     if PACKET_IN=DATA_MAGIC then
                         r.state := GETTING_DATA_PACKET_NUMBER;
@@ -382,7 +382,7 @@ begin
                         cr.checksum=PACKET_IN and
                         SEND_RECORDS_DOUT.is_buffered
                     then
-                        r.pending_received_acks(int(SEND_RECORDS_DOUT.buf_index)) := '1';
+                        r.pending_received_acks(int(SEND_RECORDS_DOUT.slot)) := '1';
                     end if;
                     r.state     := WAITING_FOR_DATA;
                 end if;
@@ -401,7 +401,7 @@ begin
                         cr.checksum=PACKET_IN and
                         SEND_RECORDS_DOUT.is_buffered
                     then
-                        r.pending_resend_reqs(int(SEND_RECORDS_DOUT.buf_index))  := '1';
+                        r.pending_resend_reqs(int(SEND_RECORDS_DOUT.slot))  := '1';
                     end if;
                     r.state := WAITING_FOR_DATA;
                 end if;
