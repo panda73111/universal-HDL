@@ -12,12 +12,12 @@ package TRANSPORT_LAYER_PKG is
     
     type packet_record_type is record
         is_buffered : boolean;
-        buf_index   : unsigned(log2(BUFFERED_PACKETS)-1 downto 0);
+        slot        : unsigned(log2(BUFFERED_PACKETS)-1 downto 0);
     end record;
     
     constant packet_record_type_def : packet_record_type := (
         is_buffered => false,
-        buf_index   => (others => '0')
+        slot        => (others => '0')
     );
     
     type packet_records_type is
@@ -35,7 +35,7 @@ package TRANSPORT_LAYER_PKG is
         if d.is_buffered then
             v(0)    := '1';
         end if;
-        v(v'high downto 1)  := stdulv(d.buf_index);
+        v(v'high downto 1)  := stdulv(d.slot);
         return v;
     end function;
     
@@ -43,7 +43,7 @@ package TRANSPORT_LAYER_PKG is
         variable d  : packet_record_type;
     begin
         d.is_buffered   := v(0)='1';
-        d.buf_index     := uns(v(v'high downto 1));
+        d.slot          := uns(v(v'high downto 1));
         return d;
     end function;
     
@@ -52,13 +52,11 @@ package TRANSPORT_LAYER_PKG is
     type packet_meta_record_type is record
         packet_number   : unsigned(7 downto 0);
         packet_length   : unsigned(7 downto 0);
-        checksum        : std_ulogic_vector(7 downto 0);
     end record;
     
     constant packet_meta_record_type_def    : packet_meta_record_type := (
         packet_number   => x"00",
-        packet_length   => x"00",
-        checksum        => x"00"
+        packet_length   => x"00"
     );
     
     type packet_meta_records_type is

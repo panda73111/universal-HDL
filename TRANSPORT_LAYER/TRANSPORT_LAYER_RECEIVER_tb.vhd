@@ -58,7 +58,7 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     -- have one dummy packet in the virtual send buffer
     
     signal send_meta_records    : packet_meta_records_type := (
-        0       => (packet_number => x"00", packet_length => x"00", checksum => x"00"),
+        0       => (packet_number => x"00", packet_length => x"00"),
         others  => packet_meta_record_type_def
     );
     

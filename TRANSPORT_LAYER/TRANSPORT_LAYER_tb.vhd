@@ -77,18 +77,26 @@ BEGIN
     -- Stimulus process
     stim_proc: process
         
-        procedure send_packet(packet_num : in natural) is
+        procedure send_packet(packet_num : in natural; wait_for_idle : in boolean) is
         begin
             DIN_WR_EN   <= '1';
             for byte_i in 0 to 127 loop
                 DIN <= stdulv(packet_num mod 8, 3) & stdulv(byte_i mod 32, 5);
+                if byte_i=127 then
+                    SEND_PACKET <= '1';
+                end if;
                 wait until rising_edge(CLK);
             end loop;
             DIN_WR_EN   <= '0';
-            SEND_PACKET <= '1';
-            wait until rising_edge(CLK);
             SEND_PACKET <= '0';
-            wait until rising_edge(CLK) and BUSY='0';
+            if wait_for_idle then
+                wait until rising_edge(CLK) and BUSY='0';
+            end if;
+        end procedure;
+        
+        procedure send_packet(packet_num : in natural) is
+        begin
+            send_packet(packet_num, true);
         end procedure;
         
         procedure receive_data_packet(packet_num : in natural) is
@@ -241,6 +249,14 @@ BEGIN
         wait until rising_edge(CLK);
         SEND_PACKET <= '0';
         wait until rising_edge(CLK) and BUSY='0';
+        
+        wait for 100 ns;
+        
+        -- test 7: send two 256 byte packets without pause
+        
+        report "Starting test 7";
+        send_packet(10, false);
+        send_packet(11);
         
         wait for 100 ns;
         
