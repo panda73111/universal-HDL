@@ -27,6 +27,9 @@ package txt_util is
     -- (can also be used for hex conversion and other bases)
     function chr(i : integer) return character;
     
+    -- reverse function to chr(integer)
+    function hex_to_int(c : character) return integer;
+    
     -- converts integer into string using specified base
     function str(i : integer; base : positive) return string;
     
@@ -36,6 +39,10 @@ package txt_util is
     -- convert std_ulogic_vector into a string in hex format
     function hstr(slv : std_ulogic_vector) return string;
     function hstr(slv : std_ulogic_vector; spaced : boolean) return string;
+    
+    -- reverse function to hstr(std_ulogic_vector)
+    function hex_to_stdulv(c : character) return std_ulogic_vector;
+    function hex_to_stdulv(s : string) return std_ulogic_vector;
     
     -- repeat a character
     function str(c : character; n : positive) return string;
@@ -60,17 +67,6 @@ package txt_util is
     
     -- convert a string to lower case
     function to_lower(s : string) return string;
-    
-    
-    -------------------------------------------------------
-    --- functions to convert strings into other formats ---
-    -------------------------------------------------------
-    
-    -- converts a character into std_ulogic
-    function to_std_ulogic(c : character) return std_ulogic;
-    
-    -- converts a string into std_ulogic_vector
-    function to_std_ulogic_vector(s : string) return std_ulogic_vector;
     
     
     ----------------
@@ -217,6 +213,53 @@ package body txt_util is
         return c;
     end function;
     
+    -- reverse function to chr(integer)
+    
+    function hex_to_int(c : character) return integer is
+        variable i  : integer;
+    begin
+        case c is
+            when '0'    => i := 0;
+            when '1'    => i := 1;
+            when '2'    => i := 2;
+            when '3'    => i := 3;
+            when '4'    => i := 4;
+            when '5'    => i := 5;
+            when '6'    => i := 6;
+            when '7'    => i := 7;
+            when '8'    => i := 8;
+            when '9'    => i := 9;
+            when 'A'    => i := 10;
+            when 'B'    => i := 11;
+            when 'C'    => i := 12;
+            when 'D'    => i := 13;
+            when 'E'    => i := 14;
+            when 'F'    => i := 15;
+            when 'G'    => i := 16;
+            when 'H'    => i := 17;
+            when 'I'    => i := 18;
+            when 'J'    => i := 19;
+            when 'K'    => i := 20;
+            when 'L'    => i := 21;
+            when 'M'    => i := 22;
+            when 'N'    => i := 23;
+            when 'O'    => i := 24;
+            when 'P'    => i := 25;
+            when 'Q'    => i := 26;
+            when 'R'    => i := 27;
+            when 'S'    => i := 28;
+            when 'T'    => i := 29;
+            when 'U'    => i := 30;
+            when 'V'    => i := 31;
+            when 'W'    => i := 32;
+            when 'X'    => i := 33;
+            when 'Y'    => i := 34;
+            when 'Z'    => i := 35;
+            when others => i := -1;
+        end case;
+        return i;
+    end function;
+    
     -- convert integer to string using specified base
     -- (adapted from Steve Vogwell's posting in comp.lang.vhdl)
     
@@ -309,6 +352,37 @@ package body txt_util is
             return hex(1 to unsp_hexlen);
         end if;
         return hex;
+    end function;
+    
+    -- reverse function to hstr(std_ulogic_vector)
+    
+    function hex_to_stdulv(c : character) return std_ulogic_vector is
+        variable v      : std_ulogic_vector(3 downto 0);
+        variable i      : natural;
+    begin
+        v   := x"0";
+        i   := hex_to_int(c);
+        for bit_i in 3 downto 0 loop
+            if i >= 2**bit_i then
+                v(bit_i)    := '1';
+                i           := i-2**bit_i;
+            end if;
+        end loop;
+        return v;
+    end function;
+    
+    function hex_to_stdulv(s : string) return std_ulogic_vector is
+        variable v      : std_ulogic_vector(s'length*4-1 downto 0);
+        variable hex_i  : natural;
+        variable c      : character;
+    begin
+        for str_i in s'range loop
+            c       := s(str_i);
+            hex_i   := s'length*4-1;
+            v(hex_i downto hex_i-3) := hex_to_stdulv(c);
+            hex_i   := hex_i-4;
+        end loop;
+        return v;
     end function;
     
     -- repeat a character
@@ -447,44 +521,6 @@ package body txt_util is
         return lowercase;
     end function;
     
-    
-    -----------------------------------------------------
-    --- functions to convert strings into other types ---
-    -----------------------------------------------------
-    
-    -- converts a character into a std_ulogic
-    
-    function to_std_ulogic(c : character) return std_ulogic is
-        variable sl : std_ulogic;
-    begin
-        case c is
-            when 'U'    => sl := 'U';
-            when 'X'    => sl := 'X';
-            when '0'    => sl := '0';
-            when '1'    => sl := '1';
-            when 'Z'    => sl := 'Z';
-            when 'W'    => sl := 'W';
-            when 'L'    => sl := 'L';
-            when 'H'    => sl := 'H';
-            when '-'    => sl := '-';
-            when others => sl := 'X';
-        end case;
-        return sl;
-    end function;
-    
-    -- converts a string into std_ulogic_vector
-    
-    function to_std_ulogic_vector(s : string) return std_ulogic_vector is
-        variable slv : std_ulogic_vector(s'high-s'low downto 0);
-        variable k   : integer;
-    begin
-        k := s'high-s'low;
-        for i in s'range loop
-            slv(k) := to_std_ulogic(s(i));
-            k      := k - 1;
-        end loop;
-        return slv;
-    end function;
     
     ------------------
     ---  file I/O  ---

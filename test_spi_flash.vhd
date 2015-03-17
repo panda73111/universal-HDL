@@ -42,12 +42,13 @@ architecture behavioral of test_spi_flash is
     signal flash_mem    : flash_mem_type  := (others => x"00");
     
     procedure initialize(signal flash_mem : out flash_mem_type) is
-        file f          : TEXT;
-        variable l      : line;
-        variable char   : character;
-        variable val    : std_ulogic_vector(7 downto 0);
-        variable addr   : natural range 0 to BYTE_COUNT-1;
-        variable good   : boolean;
+        file f                  : TEXT;
+        variable l              : line;
+        variable char           : character;
+        variable val            : std_ulogic_vector(3 downto 0);
+        variable addr           : natural range 0 to BYTE_COUNT-1;
+        variable good           : boolean;
+        variable byte_complete  : boolean;
     begin
         if INIT_FILE_PATH'length/=0 then
             assert not VERBOSE
@@ -55,13 +56,19 @@ architecture behavioral of test_spi_flash is
                 severity NOTE;
             addr    := int(INIT_ADDR);
             file_open(f, INIT_FILE_PATH, read_mode);
+            byte_complete   := false;
             while not endfile(f) loop
                 readline(f, l);
                 read(l, char, good);
                 while good loop
-                    val             := stdulv(char);
-                    flash_mem(addr) <= val;
-                    addr            := addr+1;
+                    val := hex_to_stdulv(char);
+                    if byte_complete then
+                        flash_mem(addr)(3 downto 0) <= val;
+                        addr    := addr+1;
+                    else
+                        flash_mem(addr)(7 downto 4) <= val;
+                    end if;
+                    byte_complete   := not byte_complete;
                     read(l, char, good);
                 end loop;
             end loop;
