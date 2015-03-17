@@ -20,8 +20,7 @@ entity UART_RECEIVER is
         CLK_IN_PERIOD   : real := 50.0;
         BAUD_RATE       : natural := 115_200;
         DATA_BITS       : natural range 5 to 8 := 8;
-        PARITY_BIT_TYPE : natural range 0 to 2 := 0;
-        BUFFER_SIZE     : natural := 512
+        PARITY_BIT_TYPE : natural range 0 to 2 := 0
     );
     port (
         CLK : in std_ulogic;
