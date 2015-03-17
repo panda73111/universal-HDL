@@ -113,7 +113,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         state                   => CLEARING_RECORDS,
         packet_out              => x"00",
         packet_out_valid        => '0',
-        packet_length           => x"00",
+        packet_length           => x"FF",
         slot                    => (others => '0'),
         bytes_left_counter      => (others => '0'),
         next_packet_number      => x"00",
@@ -390,6 +390,7 @@ begin
             when SENDING_DATA_PACKET_MAGIC =>
                 r.checksum                  := DATA_MAGIC;
                 r.slot                      := cr.next_free_slot;
+                r.packet_length             := x"FF";
                 r.meta_din.packet_number    := cr.next_packet_number;
                 r.meta_din.packet_length    := cr.packet_length;
                 r.send_records_index        := cr.next_packet_number;
@@ -412,7 +413,7 @@ begin
             
             when SENDING_DATA_PACKET_LENGTH =>
                 r.buf_rd_addr           := cr.buf_rd_addr+1;
-                r.bytes_left_counter    := ("0" & cr.meta_din.packet_length)-2;
+                r.bytes_left_counter    := ("0" & cr.meta_din.packet_length)-1;
                 r.checksum              := cr.checksum+cr.meta_din.packet_length;
                 send_packet_byte(stdulv(cr.meta_din.packet_length), SENDING_DATA_PACKET_PAYLOAD);
             

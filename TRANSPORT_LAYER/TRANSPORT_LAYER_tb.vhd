@@ -112,7 +112,7 @@ BEGIN
             wait until rising_edge(CLK);
             checksum    := checksum+PACKET_IN;
             -- packet length
-            PACKET_IN   <= stdulv(128, 8);
+            PACKET_IN   <= stdulv(127, 8);
             wait until rising_edge(CLK);
             checksum    := checksum+PACKET_IN;
             -- data

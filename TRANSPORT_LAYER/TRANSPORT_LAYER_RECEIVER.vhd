@@ -251,9 +251,8 @@ begin
             when READING_OUT =>
                 r.buf_rd_addr         := cr.buf_rd_addr+1;
                 r.bytes_left_to_read  := cr.bytes_left_to_read-1;
-                if cr.bytes_left_to_read(8)='0' then
-                    r.dout_valid          := '1';
-                else
+                r.dout_valid          := '1';
+                if cr.bytes_left_to_read(8)='1' then
                     -- finished reading one packet, remove it from the buffer
                     r.packet_rm_en  := '1';
                     r.state         := INCREMENTING_PACKET_NUMBER;
@@ -330,7 +329,7 @@ begin
             
             when GETTING_DATA_LENGTH =>
                 r.meta_din.packet_length    := uns(PACKET_IN);
-                r.bytes_left_counter        := ("0" & uns(PACKET_IN))-2;
+                r.bytes_left_counter        := ("0" & uns(PACKET_IN))-1;
                 if PACKET_IN_WR_EN='1' then
                     r.checksum  := cr.checksum+PACKET_IN;
                     r.state     := GETTING_DATA;

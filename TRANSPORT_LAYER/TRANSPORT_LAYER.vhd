@@ -18,7 +18,7 @@
 --      +--------+                                +--------+
 --    1 | number | packet ID                    1 | number | ID of the acknowledged packet
 --      +--------+                                +--------+
---    2 | length | payload length               2 |checksum|
+--    2 | length | payload length (1 biased)    2 |checksum|
 --      +--------+                                +--------+
 --    3 |        |
 --         data                               resend demand packet format:
