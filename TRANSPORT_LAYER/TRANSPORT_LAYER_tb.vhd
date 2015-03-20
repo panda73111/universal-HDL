@@ -77,12 +77,12 @@ BEGIN
     -- Stimulus process
     stim_proc: process
         
-        procedure send_packet(packet_num : in natural; wait_for_idle : in boolean) is
+        procedure send_packet(packet_num : in natural; wait_for_idle : in boolean; set_send_packet : in boolean) is
         begin
             DIN_WR_EN   <= '1';
             for byte_i in 0 to 127 loop
                 DIN <= stdulv(packet_num mod 8, 3) & stdulv(byte_i mod 32, 5);
-                if byte_i=127 then
+                if byte_i=127 and set_send_packet then
                     SEND_PACKET <= '1';
                 end if;
                 wait until rising_edge(CLK);
@@ -90,8 +90,13 @@ BEGIN
             DIN_WR_EN   <= '0';
             SEND_PACKET <= '0';
             if wait_for_idle then
-                wait until rising_edge(CLK) and BUSY='0';
+                wait until falling_edge(BUSY);
             end if;
+        end procedure;
+        
+        procedure send_packet(packet_num : in natural; set_send_packet : in boolean) is
+        begin
+            send_packet(packet_num, true, true);
         end procedure;
         
         procedure send_packet(packet_num : in natural) is
@@ -171,17 +176,17 @@ BEGIN
             if BUSY='0' then
                 wait until BUSY='1';
             end if;
-            wait until rising_edge(CLK) and BUSY='0';
+            wait until falling_edge(BUSY);
         end procedure;
         
     begin
         RST <= '1';
-        wait for 100 ns;
+        wait for 500 ns;
         RST <= '0';
-        wait for 100 ns;
-        wait until rising_edge(CLK) and BUSY='0';
+        wait for 500 ns;
+        wait until falling_edge(BUSY);
         
-        wait for 100 ns;
+        wait for 500 ns;
         
         -- test 1: receive a 128 byte packet
         
@@ -189,7 +194,7 @@ BEGIN
         receive_data_packet(0);
         wait_for_readout;
         
-        wait for 100 ns;
+        wait for 500 ns;
         
         -- test 2: send a packet and receive a resend request packet
         
@@ -197,14 +202,14 @@ BEGIN
         send_packet(0);
         receive_resend_request_packet(0);
         
-        wait for 100 ns;
+        wait for 500 ns;
         
         -- test 3: receive an acknowledge packet for packet #0
         
         report "Starting test 3";
         receive_acknowledge_packet(0);
         
-        wait for 100 ns;
+        wait for 500 ns;
         
         -- test 4: receive 8 packets in random order
         
@@ -226,7 +231,7 @@ BEGIN
         wait_for_readout;
         wait_for_readout;
         
-        wait for 100 ns;
+        wait for 500 ns;
         
         -- test 5: receive 8 identical packets
         
@@ -240,7 +245,7 @@ BEGIN
         receive_data_packet(9);
         receive_data_packet(9);
         
-        wait for 100 ns;
+        wait for 500 ns;
         
         -- test 6: try sending an empty packet
         
@@ -248,17 +253,33 @@ BEGIN
         SEND_PACKET <= '1';
         wait until rising_edge(CLK);
         SEND_PACKET <= '0';
-        wait until rising_edge(CLK) and BUSY='0';
+        wait until rising_edge(CLK);
         
-        wait for 100 ns;
+        wait for 500 ns;
         
         -- test 7: send two 256 byte packets without pause
         
         report "Starting test 7";
         send_packet(10, false);
         send_packet(11);
+        wait until falling_edge(BUSY);
         
-        wait for 100 ns;
+        wait for 500 ns;
+        
+        -- test 8: send 1024 byte without setting SEND_PACKET='1' between each 256 byte block
+        
+        report "Starting test 8";
+        send_packet(12, false, false);
+        send_packet(13, false, false);
+        send_packet(14, false, false);
+        send_packet(15, false, false);
+        send_packet(16, false, false);
+        send_packet(17, false, false);
+        send_packet(18, false, false);
+        send_packet(19);
+        wait until falling_edge(BUSY);
+        
+        wait for 500 ns;
         
         report "NONE. All tests finished successfully."
             severity FAILURE;

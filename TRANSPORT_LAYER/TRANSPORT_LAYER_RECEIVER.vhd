@@ -46,7 +46,7 @@ end TRANSPORT_LAYER_RECEIVER;
 
 architecture rtl of TRANSPORT_LAYER_RECEIVER is
     
-    constant BUF_INDEX_BITS : natural := log2(BUFFERED_PACKETS);
+    constant SLOT_BITS  : natural := log2(BUFFERED_PACKETS);
     
     type state_type is (
         CLEARING_RECORDS,
@@ -64,11 +64,11 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     type reg_type is record
         state                       : state_type;
         packet_number               : unsigned(7 downto 0);
-        packet_index                : unsigned(BUF_INDEX_BITS-1 downto 0);
+        slot                        : natural range 0 to BUFFERED_PACKETS-1;
         bytes_left_counter          : unsigned(8 downto 0);
         checksum                    : std_ulogic_vector(7 downto 0);
         occupied_slots              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        next_free_slot              : unsigned(BUF_INDEX_BITS-1 downto 0);
+        next_free_slot              : natural range 0 to BUFFERED_PACKETS-1;
         got_first_packet            : boolean;
         --- resend request and acknowledge handling ---
         pending_resend_reqs         : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
@@ -77,7 +77,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         pending_ack_packet_number   : unsigned(7 downto 0);
         --- packet buffer ---
         buf_wr_en                   : std_ulogic;
-        buf_wr_addr                 : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
+        buf_wr_addr                 : std_ulogic_vector(SLOT_BITS+7 downto 0);
         --- global packet records ---
         records_index               : unsigned(7 downto 0);
         recv_records_din            : packet_record_type;
@@ -90,11 +90,11 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     constant reg_type_def  : reg_type := (
         state                       => CLEARING_RECORDS,
         packet_number               => x"00",
-        packet_index                => (others => '0'),
+        slot                        => 0,
         bytes_left_counter          => (others => '0'),
         checksum                    => x"00",
         occupied_slots              => (others => '0'),
-        next_free_slot              => (others => '0'),
+        next_free_slot              => 0,
         got_first_packet            => false,
         --- resend request and acknowledge handling ---
         pending_resend_reqs         => (others => '0'),
@@ -137,10 +137,10 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     type readout_reg_type is record
         state               : readout_state_type;
         dout_valid          : std_ulogic;
-        buf_rd_addr         : std_ulogic_vector(BUF_INDEX_BITS+7 downto 0);
+        buf_rd_addr         : std_ulogic_vector(SLOT_BITS+7 downto 0);
         packet_number       : unsigned(7 downto 0);
         bytes_left_to_read  : unsigned(8 downto 0);
-        slot                : unsigned(BUF_INDEX_BITS-1 downto 0);
+        slot                : natural range 0 to BUFFERED_PACKETS-1;
         packet_rm_en        : std_ulogic;
     end record;
     
@@ -150,7 +150,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         buf_rd_addr         => (others => '0'),
         packet_number       => x"00",
         bytes_left_to_read  => (others => '0'),
-        slot                => (others => '0'),
+        slot                => 0,
         packet_rm_en        => '0'
     );
     
@@ -211,12 +211,12 @@ begin
         if RST='1' then
             packet_meta_records <= packet_meta_records_type_def;
         elsif rising_edge(CLK) then
-            meta_dout   <= packet_meta_records(int(next_readout_reg.slot));
+            meta_dout   <= packet_meta_records(next_readout_reg.slot);
             if cur_reg.meta_wr_en='1' then
-                packet_meta_records(int(cur_reg.packet_index))  <= cur_reg.meta_din;
+                packet_meta_records(cur_reg.slot)   <= cur_reg.meta_din;
             end if;
             if cur_readout_reg.packet_rm_en='1' then
-                packet_meta_records(int(cur_readout_reg.slot))    <= packet_meta_record_type_def;
+                packet_meta_records(cur_readout_reg.slot)   <= packet_meta_record_type_def;
             end if;
         end if;
     end process;
@@ -238,7 +238,7 @@ begin
                 end if;
             
             when WAITING_FOR_NEXT_PACKET =>
-                r.buf_rd_addr   := stdulv(recv_records_readout_dout.slot) & x"00";
+                r.buf_rd_addr   := stdulv(recv_records_readout_dout.slot, SLOT_BITS) & x"00";
                 r.slot          := recv_records_readout_dout.slot;
                 if recv_records_readout_dout.is_buffered then
                     r.state := GETTING_PACKET_LENGTH;
@@ -289,7 +289,7 @@ begin
         r.pending_resend_reqs   := cr.pending_resend_reqs   and (cr.pending_resend_reqs xor RESEND_REQUEST_ACK);
         
         if cur_readout_reg.packet_rm_en='1' then
-            r.occupied_slots(int(cur_readout_reg.slot)) := '0';
+            r.occupied_slots(cur_readout_reg.slot)  := '0';
         end if;
         
         case cr.state is
@@ -303,9 +303,9 @@ begin
                 end if;
             
             when WAITING_FOR_DATA =>
-                r.occupied_slots(int(cr.next_free_slot))    := '1';
+                r.occupied_slots(cr.next_free_slot) := '1';
                 r.records_index         := cr.packet_number;
-                r.packet_index          := cr.next_free_slot;
+                r.slot                  := cr.next_free_slot;
                 r.recv_records_din.slot := cr.next_free_slot;
                 r.checksum              := PACKET_IN;
                 if PACKET_IN_WR_EN='1' then
@@ -354,8 +354,8 @@ begin
                     then
                         for i in BUFFERED_PACKETS-1 downto 0 loop
                             if cr.occupied_slots(i)='0' then
-                                r.next_free_slot        := uns(i, BUF_INDEX_BITS);
-                                r.buf_wr_addr           := stdulv(i, BUF_INDEX_BITS) & x"00";
+                                r.next_free_slot        := i;
+                                r.buf_wr_addr           := stdulv(i, SLOT_BITS) & x"00";
                             end if;
                         end loop;
                         r.meta_wr_en                := '1';
@@ -381,7 +381,7 @@ begin
                         cr.checksum=PACKET_IN and
                         SEND_RECORDS_DOUT.is_buffered
                     then
-                        r.pending_received_acks(int(SEND_RECORDS_DOUT.slot)) := '1';
+                        r.pending_received_acks(SEND_RECORDS_DOUT.slot) := '1';
                     end if;
                     r.state     := WAITING_FOR_DATA;
                 end if;
@@ -400,7 +400,7 @@ begin
                         cr.checksum=PACKET_IN and
                         SEND_RECORDS_DOUT.is_buffered
                     then
-                        r.pending_resend_reqs(int(SEND_RECORDS_DOUT.slot))  := '1';
+                        r.pending_resend_reqs(SEND_RECORDS_DOUT.slot)   := '1';
                     end if;
                     r.state := WAITING_FOR_DATA;
                 end if;
