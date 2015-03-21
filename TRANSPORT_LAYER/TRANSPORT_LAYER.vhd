@@ -31,7 +31,11 @@
 --                                              2 |checksum|
 --                                                +--------+
 -- Additional Comments:
---  
+--  A packet is sent when 256 bytes were written or less bytes were written and
+--  the SEND_PACKET input was set to high. It is not possible to send a packet
+--  not containing any data bytes. If an acknowledge for a sent packet is not
+--  received within [RESEND_TIMEOUT_CYCLES] cycles, that packet is sent again.
+--  This can occur up to [MAX_TIMEOUT_RESENDS] times.
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -40,6 +44,10 @@ use work.TRANSPORT_LAYER_PKG.all;
 use work.help_funcs.all;
 
 entity TRANSPORT_LAYER is
+    generic (
+        RESEND_TIMEOUT_CYCLES   : positive := 5_000_000; -- 100 ms
+        MAX_TIMEOUT_RESENDS     : positive := 10
+    );
     port (
         CLK : in std_ulogic;
         RST : in std_ulogic;
@@ -84,6 +92,10 @@ begin
     BUSY    <= sender_busy or receiver_busy;
     
     TRANSPORT_LAYER_SENDER_inst : entity work.TRANSPORT_LAYER_SENDER
+        generic map (
+            RESEND_TIMEOUT_CYCLES   => RESEND_TIMEOUT_CYCLES,
+            MAX_TIMEOUT_RESENDS     => MAX_TIMEOUT_RESENDS
+        )
         port map (
             CLK => CLK,
             RST => RST,

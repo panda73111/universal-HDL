@@ -18,8 +18,8 @@ use work.help_funcs.all;
 
 entity TRANSPORT_LAYER_SENDER is
     generic (
-        TIMEOUT_CYCLES      : positive := 5000; --5_000_000; -- 100 ms
-        MAX_TIMEOUT_RESENDS : positive := 10
+        RESEND_TIMEOUT_CYCLES   : positive;
+        MAX_TIMEOUT_RESENDS     : positive
     );
     port (
         CLK : in std_ulogic;
@@ -127,7 +127,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     
     --- timeout records ---
     
-    constant TIMEOUT_BITS   : natural := log2(TIMEOUT_CYCLES);
+    constant TIMEOUT_BITS   : natural := log2(RESEND_TIMEOUT_CYCLES);
     
     type timeout_record_type is record
         is_active   : boolean;
@@ -141,7 +141,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
     
     constant timeout_def    :
         unsigned(TIMEOUT_BITS downto 0) :=
-        uns(TIMEOUT_CYCLES-1, TIMEOUT_BITS+1);
+        uns(RESEND_TIMEOUT_CYCLES-1, TIMEOUT_BITS+1);
     
     constant timeout_records_type_def   : timeout_records_type := (
         others => (
