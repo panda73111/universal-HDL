@@ -115,6 +115,7 @@ begin
                 if SN='1' then exit bit_loop; end if;
             end loop;
             flash_addr(0)   := MISO;
+            flash_addr      := stdulv(int(flash_addr) mod BYTE_COUNT, 24);
         end procedure;
         
         procedure get_data_byte is
