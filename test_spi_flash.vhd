@@ -1,14 +1,14 @@
 ----------------------------------------------------------------------------------
 -- Engineer: Sebastian Huether
--- 
--- Create Date:    09:14:32 01/21/2015 
--- Module Name:    test_spi_flash - behavioral 
+--
+-- Create Date:    09:14:32 01/21/2015
+-- Module Name:    test_spi_flash - behavioral
 -- Project Name:   test_spi_flash
 -- Tool versions:  Xilinx ISE 14.7
 -- Description:
---  
+--
 -- Additional Comments:
---  
+--
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -19,12 +19,20 @@ use work.txt_util.all;
 
 entity test_spi_flash is
     generic (
-        BYTE_COUNT      : positive := 1024;
-        INIT_FILE_PATH  : string := "";
-        INIT_ADDR       : std_ulogic_vector(23 downto 0) := x"000000";
-        ERASE_TIME      : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
-        PROGRAM_TIME    : time := 800 us;
-        VERBOSE         : boolean := false
+        BYTE_COUNT          : positive := 1024;
+        INIT_FILE_0_PATH    : string := "";
+        INIT_FILE_0_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
+        INIT_FILE_1_PATH    : string := "";
+        INIT_FILE_1_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
+        INIT_FILE_2_PATH    : string := "";
+        INIT_FILE_2_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
+        INIT_FILE_3_PATH    : string := "";
+        INIT_FILE_3_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
+        INIT_FILE_4_PATH    : string := "";
+        INIT_FILE_5_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
+        ERASE_TIME          : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
+        PROGRAM_TIME        : time := 800 us;
+        VERBOSE             : boolean := false
     );
     port (
         MISO    : in std_ulogic;
@@ -35,12 +43,14 @@ entity test_spi_flash is
 end test_spi_flash;
 
 architecture behavioral of test_spi_flash is
-    
+
+    constant INIT_FILE_COUNT    : positive := 5;
+
     type flash_mem_type is
         array(0 to BYTE_COUNT-1) of
         std_ulogic_vector(7 downto 0);
     signal flash_mem    : flash_mem_type  := (others => x"00");
-    
+
     procedure initialize(signal flash_mem : out flash_mem_type) is
         file f                  : TEXT;
         variable l              : line;
@@ -78,9 +88,9 @@ architecture behavioral of test_spi_flash is
             file_close(f);
         end if;
     end procedure;
-    
+
 begin
-    
+
     spi_flash_sim_proc : process
         subtype cmd_type is std_ulogic_vector(7 downto 0);
         constant CMD_WRITE_ENABLE           : cmd_type := x"06";
@@ -96,7 +106,7 @@ begin
         variable erase_start_time   : time;
         variable programming        : boolean;
         variable program_start_time : time;
-        
+
         procedure get_cmd is
         begin
             bit_loop : for i in 7 downto 1 loop
@@ -106,7 +116,7 @@ begin
             end loop;
             flash_cmd(0)    := MISO;
         end procedure;
-        
+
         procedure get_addr is
         begin
             bit_loop : for i in 23 downto 1 loop
@@ -117,7 +127,7 @@ begin
             flash_addr(0)   := MISO;
             flash_addr      := stdulv(int(flash_addr) mod BYTE_COUNT, 24);
         end procedure;
-        
+
         procedure get_data_byte is
         begin
             bit_loop : for i in 7 downto 1 loop
@@ -127,7 +137,7 @@ begin
             end loop;
             flash_data_byte(0)  := MISO;
         end procedure;
-        
+
         procedure send_status is
         begin
             bit_loop : for i in 7 downto 1 loop
@@ -142,7 +152,7 @@ begin
                 MOSI    <= flash_status(0);
             end if;
         end procedure;
-        
+
         procedure send_data_byte is
         begin
             bit_loop : for i in 7 downto 1 loop
@@ -159,32 +169,32 @@ begin
         end procedure;
     begin
         initialize(flash_mem);
-        
+
         flash_status    := x"00";
         main_loop : loop
             wait until rising_edge(C);
-            
+
             if erasing and now-erase_start_time>=ERASE_TIME then
                 erasing         := false;
                 flash_status(1) := '0'; -- WEN
                 flash_status(0) := '0'; -- WIP
             end if;
-            
+
             if programming and now-program_start_time>=PROGRAM_TIME then
                 programming     := false;
                 flash_status(1) := '0'; -- WEN
                 flash_status(0) := '0'; -- WIP
             end if;
-            
+
             if SN='0' then
-                
+
                 get_cmd;
                 assert not VERBOSE
                     report "Got command: 0x" & hstr(flash_cmd)
                     severity NOTE;
-                
+
                 case flash_cmd is
-                    
+
                     when CMD_WRITE_ENABLE =>
                         wait until rising_edge(C) or SN='1';
                         if SN='1' then
@@ -198,7 +208,7 @@ begin
                             wait until SN='1';
                         end if;
                         next main_loop;
-                    
+
                     when CMD_READ_STATUS_REGISTER =>
                         while SN='0' loop
                             assert not VERBOSE
@@ -210,7 +220,7 @@ begin
                             end if;
                         end loop;
                         next main_loop;
-                    
+
                     when others =>
                         if
                             flash_cmd/=CMD_READ_DATA_BYTES and
@@ -223,9 +233,9 @@ begin
                             if SN='0' then wait until SN='1'; end if;
                             next main_loop;
                         end if;
-                    
+
                 end case;
-                
+
                 wait until rising_edge(C) or SN='1';
                 if SN='1' then next main_loop; end if;
                 get_addr;
@@ -233,9 +243,9 @@ begin
                 assert not VERBOSE
                     report "Got address: 0x" & hstr(flash_addr, false)
                     severity NOTE;
-                
+
                 case flash_cmd is
-                    
+
                     when CMD_READ_DATA_BYTES =>
                         if flash_status(0)='0' then
                             while SN='0' loop
@@ -252,7 +262,7 @@ begin
                             if SN='0' then wait until SN='1'; end if;
                         end if;
                         next main_loop;
-                    
+
                     when CMD_SECTOR_ERASE =>
                         wait until rising_edge(C) or SN='1';
                         if SN='1' then
@@ -272,7 +282,7 @@ begin
                         erase_start_time    := now;
                         flash_status(0)     := '1';
                         next main_loop;
-                    
+
                     when CMD_PAGE_PROGRAM =>
                         wait until rising_edge(C) or SN='1';
                         if SN='1' then next main_loop; end if;
@@ -297,14 +307,14 @@ begin
                         program_start_time  := now;
                         flash_status(0)     := '1';
                         next main_loop;
-                    
+
                     when others =>
                         null;
-                    
+
                 end case;
-                
+
             end if;
         end loop;
     end process;
-    
+
 end;
