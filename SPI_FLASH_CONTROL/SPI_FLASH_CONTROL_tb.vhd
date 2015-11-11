@@ -146,13 +146,13 @@ BEGIN
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
-                miso    <= flash_mem(nat(flash_addr))(i);
+                miso    <= flash_mem(int(flash_addr))(i);
                 wait until rising_edge(c) or sn='1';
                 if sn='1' then exit bit_loop; end if;
             end loop;
             if sn='0' then
                 wait until falling_edge(c) or sn='1';
-                miso    <= flash_mem(nat(flash_addr))(0);
+                miso    <= flash_mem(int(flash_addr))(0);
             end if;
         end procedure;
     begin
@@ -225,7 +225,7 @@ BEGIN
                     when CMD_READ_DATA_BYTES =>
                         if flash_status(0)='0' then
                             while sn='0' loop
-                                report "Reading byte: 0x" & hstr(flash_mem(nat(flash_addr))) & " at 0x" & hstr(flash_addr, false);
+                                report "Reading byte: 0x" & hstr(flash_mem(int(flash_addr))) & " at 0x" & hstr(flash_addr, false);
                                 send_data_byte;
                                 flash_addr  := flash_addr+1;
                                 if sn='0' then
@@ -267,7 +267,7 @@ BEGIN
                             end if;
                             if flash_status(1 downto 0)="10" then
                                 report "Writing byte: 0x" & hstr(flash_data_byte) & " at 0x" & hstr(flash_addr, false);
-                                flash_mem(nat(flash_addr))  <= flash_data_byte;
+                                flash_mem(int(flash_addr))  <= flash_data_byte;
                                 flash_addr(15 downto 0)     := flash_addr(15 downto 0)+1;
                             end if;
                             wait until rising_edge(c) or sn='1';
@@ -326,7 +326,7 @@ BEGIN
         while valid='0' loop
             wait until rising_edge(clk);
         end loop;
-        assert dout=flash_mem(nat(flash_addr))
+        assert dout=flash_mem(int(flash_addr))
             report "Got wrong data!"
             severity FAILURE;
         rd_en   <= '0';
@@ -364,9 +364,9 @@ BEGIN
             while valid='0' loop
                 wait until rising_edge(clk);
             end loop;
-            assert dout=flash_mem(nat(flash_addr)+i)
+            assert dout=flash_mem(int(flash_addr)+i)
                 report "Got wrong data at 0x" & hstr(flash_addr+i, false) &
-                        ": expected 0x" & hstr(flash_mem(nat(flash_addr)+i)) &
+                        ": expected 0x" & hstr(flash_mem(int(flash_addr)+i)) &
                         ", got 0x" & hstr(dout) & "!"
                 severity FAILURE;
         end loop;
