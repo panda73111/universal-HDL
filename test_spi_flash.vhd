@@ -73,6 +73,10 @@ architecture behavioral of test_spi_flash is
         std_ulogic_vector(7 downto 0);
     signal buf  : buffer_type := (others => x"00");
 
+    constant BUFFER_MASK    :
+        std_ulogic_vector(23 downto 0) :=
+        stdulv(2**log2(buffer_type'length)-1, 24);
+
     function addr_to_init_file_index(
         addr : std_ulogic_vector(23 downto 0)
     ) return integer is
@@ -124,6 +128,10 @@ architecture behavioral of test_spi_flash is
         variable good               : boolean;
         variable byte_complete      : boolean;
     begin
+        assert not VERBOSE
+            report "Filling the buffer at 0x" & hstr(start_addr)
+            severity NOTE;
+
         init_file_index  := addr_to_init_file_index(start_addr);
         if init_file_index=-1 then
             for i in 0 to buffer_type'length-1 loop
@@ -173,13 +181,32 @@ architecture behavioral of test_spi_flash is
 
         file_close(f);
 
-        if buf_i!=buffer_type'length then
+        if buf_i/=buffer_type'length then
             -- fill the rest with zeros
             for i in buf_i to buffer_type'length-1 loop
                 buf(i)  <= x"00";
             end loop;
         end if;
 
+    end procedure;
+
+    procedure read_flash(
+        signal buf              : inout buffer_type;
+        variable buf_start_addr : std_ulogic_vector(23 downto 0);
+        variable addr           : std_ulogic_vector(23 downto 0);
+        variable data           : out std_ulogic_vector(7 downto 0)
+    ) is
+        variable new_start_addr : std_ulogic_vector(23 downto 0);
+    begin
+        if
+            addr < buf_start_addr or
+            addr >= buf_start_addr+BUFFER_SIZE
+        then
+            new_start_addr  := addr and not BUFFER_MASK;
+            fill_buffer(buf, new_start_addr);
+        end if;
+
+        data    := buf(int(addr-buf_start_addr));
     end procedure;
 
 begin
@@ -220,7 +247,6 @@ begin
                 exit bit_loop when SN='1';
             end loop;
             flash_addr(0)   := MISO;
-            flash_addr      := stdulv(int(flash_addr) mod BYTE_COUNT, 24);
         end procedure;
 
         procedure get_data_byte is
@@ -249,17 +275,19 @@ begin
         end procedure;
 
         procedure send_data_byte is
+            variable data   : std_ulogic_vector(7 downto 0);
         begin
+            read_flash(buf, flash_addr, data);
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(C) or SN='1';
                 exit bit_loop when SN='1';
-                MOSI    <= flash_mem(int(flash_addr))(i);
+                MOSI    <= data(i);
                 wait until rising_edge(C) or SN='1';
                 exit bit_loop when SN='1';
             end loop;
             if SN='0' then
                 wait until falling_edge(C) or SN='1';
-                MOSI    <= flash_mem(int(flash_addr))(0);
+                MOSI    <= data(0);
             end if;
         end procedure;
     begin
