@@ -19,20 +19,13 @@ use work.txt_util.all;
 
 entity test_spi_flash is
     generic (
-        INIT_FILE_0_PATH    : string := "";
-        INIT_FILE_0_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
-        INIT_FILE_1_PATH    : string := "";
-        INIT_FILE_1_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
-        INIT_FILE_2_PATH    : string := "";
-        INIT_FILE_2_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
-        INIT_FILE_3_PATH    : string := "";
-        INIT_FILE_3_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
-        INIT_FILE_4_PATH    : string := "";
-        INIT_FILE_4_ADDR    : std_ulogic_vector(23 downto 0) := x"000000";
-        BUFFER_SIZE         : positive := 256;
-        ERASE_TIME          : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
-        PROGRAM_TIME        : time := 800 us;
-        VERBOSE             : boolean := false
+        BYTE_COUNT      : positive := 1024;
+        INIT_FILE_PATH  : string := "";
+        INIT_FILE_ADDR  : std_ulogic_vector(23 downto 0) := x"000000";
+        BUFFER_SIZE     : positive := 256;
+        ERASE_TIME      : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
+        PROGRAM_TIME    : time := 800 us;
+        VERBOSE         : boolean := false
     );
     port (
         MISO    : in std_ulogic;
@@ -44,113 +37,57 @@ end test_spi_flash;
 
 architecture behavioral of test_spi_flash is
 
-    constant INIT_FILE_COUNT    : positive := 5;
-
-    type init_file_paths_type is
-        array(0 to INIT_FILE_COUNT) of
-        string;
-    constant INIT_FILE_PATHS    : init_file_paths_type := (
-        INIT_FILE_0_PATH,
-        INIT_FILE_1_PATH,
-        INIT_FILE_2_PATH,
-        INIT_FILE_3_PATH,
-        INIT_FILE_4_PATH
-    );
-
-    type init_file_addrs_type is
-        array(0 to INIT_FILE_COUNT) of
-        std_ulogic_vector(23 downto 0);
-    constant INIT_FILE_ADDRS    : init_file_addrs_type := (
-        INIT_FILE_0_ADDR,
-        INIT_FILE_1_ADDR,
-        INIT_FILE_2_ADDR,
-        INIT_FILE_3_ADDR,
-        INIT_FILE_4_ADDR
-    );
-
     type buffer_type is
         array(0 to BUFFER_SIZE-1) of
         std_ulogic_vector(7 downto 0);
     signal buf  : buffer_type := (others => x"00");
 
+    shared variable buffer_start_addr   : std_ulogic_vector(23 downto 0) := x"000000";
+
     constant BUFFER_MASK    :
         std_ulogic_vector(23 downto 0) :=
         stdulv(2**log2(buffer_type'length)-1, 24);
 
-    function addr_to_init_file_index(
-        addr : std_ulogic_vector(23 downto 0)
-    ) return integer is
-        variable highest_matching_address   : std_ulogic_vector(23 downto 0);
-        variable highest_matching_index     : integer;
-    begin
-        highest_matching_index  := -1;
-
-        -- search for at least one init address below or at the given one
-        for i in 0 to INIT_FILE_COUNT loop
-            if addr >= INIT_FILE_ADDRS(i) then
-                highest_matching_index      := i;
-                highest_matching_address    := INIT_FILE_ADDRS(i);
-                exit;
-            end if;
-        end loop;
-
-        if highest_matching_index=-1 then
-            -- no init file for the given address
-            return -1;
-        end if;
-
-        -- search the highest address below or at the given one
-        for i in 0 to INIT_FILE_COUNT loop
-            if
-                INIT_FILE_ADDRS(i) > highest_matching_address and
-                addr >= INIT_FILE_ADDRS(i)
-            then
-                highest_matching_index      := i;
-                highest_matching_address    := INIT_FILE_ADDRS(i);
-            end if;
-        end loop;
-
-        return highest_matching_index;
-    end function;
-
     procedure fill_buffer(
-            signal buf          : out buffer_type;
-            variable start_addr : in std_ulogic_vector(23 downto 0)
+            signal buf          : out buffer_type
     ) is
-        variable init_file_index    : integer;
-        variable init_file_path     : string;
-        variable bytes_to_skip      : natural;
-        file f                      : TEXT;
-        variable l                  : line;
-        variable char               : character;
-        variable val                : std_ulogic_vector(3 downto 0);
-        variable buf_i              : natural range 0 to buffer_type'length-1;
-        variable good               : boolean;
-        variable byte_complete      : boolean;
+        variable bytes_to_skip  : natural;
+        file f                  : TEXT;
+        variable l              : line;
+        variable char           : character;
+        variable val            : std_ulogic_vector(3 downto 0);
+        variable buf_i          : natural range 0 to buffer_type'length-1;
+        variable good           : boolean;
+        variable byte_complete  : boolean;
     begin
         assert not VERBOSE
-            report "Filling the buffer at 0x" & hstr(start_addr)
+            report "Filling the buffer at 0x" & hstr(buffer_start_addr)
             severity NOTE;
+        
+        assert buffer_start_addr<BYTE_COUNT
+            report "The SPI flash is smaller than the requested address"
+            severity FAILURE;
 
-        init_file_index  := addr_to_init_file_index(start_addr);
-        if init_file_index=-1 then
-            for i in 0 to buffer_type'length-1 loop
-                buf(i)  <= x"00";
-            end loop;
+        buf <= (others => x"00");
+        
+        if INIT_FILE_ADDR>buffer_start_addr+BUFFER_SIZE then
+            -- no init data for this address range
             return;
         end if;
-
-        init_file_path  := INIT_FILE_PATHS(init_file_index);
+        
+        bytes_to_skip   := int(buffer_start_addr-INIT_FILE_ADDR);
+        if INIT_FILE_ADDR>buffer_start_addr then
+            bytes_to_skip   := 0;
+        end if;
 
         assert not VERBOSE
-            report "Opening file: " & init_file_path
+            report "Opening file: " & INIT_FILE_PATH
             severity NOTE;
 
-        bytes_to_skip   := int(start_addr-INIT_FILE_ADDRS(init_file_index));
         buf_i           := 0;
         byte_complete   := false;
 
-        file_open(f, init_file_path, read_mode);
+        file_open(f, INIT_FILE_PATH, read_mode);
         file_loop : while not endfile(f) loop
             readline(f, l);
             read(l, char, good);
@@ -176,37 +113,45 @@ architecture behavioral of test_spi_flash is
         end loop;
 
         assert not VERBOSE
-            report "Closing file: " & init_file_path
+            report "Closing file: " & INIT_FILE_PATH
             severity NOTE;
 
         file_close(f);
 
-        if buf_i/=buffer_type'length then
-            -- fill the rest with zeros
-            for i in buf_i to buffer_type'length-1 loop
-                buf(i)  <= x"00";
-            end loop;
-        end if;
-
     end procedure;
 
     procedure read_flash(
-        signal buf              : inout buffer_type;
-        variable buf_start_addr : std_ulogic_vector(23 downto 0);
-        variable addr           : std_ulogic_vector(23 downto 0);
-        variable data           : out std_ulogic_vector(7 downto 0)
+        signal buf      : inout buffer_type;
+        variable addr   : std_ulogic_vector(23 downto 0);
+        variable data   : out std_ulogic_vector(7 downto 0)
     ) is
-        variable new_start_addr : std_ulogic_vector(23 downto 0);
+        variable temp   : std_ulogic_vector(7 downto 0);
     begin
         if
-            addr < buf_start_addr or
-            addr >= buf_start_addr+BUFFER_SIZE
+            addr<buffer_start_addr or
+            addr>=buffer_start_addr+BUFFER_SIZE
         then
-            new_start_addr  := addr and not BUFFER_MASK;
-            fill_buffer(buf, new_start_addr);
+            buffer_start_addr   := addr and not BUFFER_MASK;
+            fill_buffer(buf);
         end if;
 
-        data    := buf(int(addr-buf_start_addr));
+        temp    := buf(int(addr-buffer_start_addr));
+        data    := temp;
+        
+        assert not VERBOSE
+            report "Reading byte: 0x" & hstr(temp) & " at 0x" & hstr(addr, false)
+            severity NOTE;
+    end procedure;
+    
+    procedure write_flash(
+        signal buf      : inout buffer_type;
+        variable addr   : std_ulogic_vector(23 downto 0);
+        variable data   : in std_ulogic_vector(7 downto 0)
+    ) is
+    begin
+        assert not VERBOSE
+            report "Writing byte: 0x" & hstr(data) & " at 0x" & hstr(addr, false)
+            severity NOTE;
     end procedure;
 
 begin
@@ -219,7 +164,6 @@ begin
         constant CMD_PAGE_PROGRAM           : cmd_type := x"02";
         constant CMD_READ_STATUS_REGISTER   : cmd_type := x"05";
 
-        variable buffer_start_addr  : std_ulogic_vector(23 downto 0);
         variable flash_cmd          : cmd_type;
         variable flash_addr         : std_ulogic_vector(23 downto 0);
         variable flash_data_byte    : std_ulogic_vector(7 downto 0);
@@ -247,6 +191,7 @@ begin
                 exit bit_loop when SN='1';
             end loop;
             flash_addr(0)   := MISO;
+            flash_addr      := stdulv(int(flash_addr) mod BYTE_COUNT, 24);
         end procedure;
 
         procedure get_data_byte is
@@ -291,8 +236,12 @@ begin
             end if;
         end procedure;
     begin
+        assert INIT_FILE_ADDR<BYTE_COUNT
+            report "The SPI flash is too small for the initialization file adrress"
+            severity FAILURE;
+        
         buffer_start_addr   := x"000000";
-        fill_buffer(buf, buffer_start_addr);
+        fill_buffer(buf);
 
         flash_status    := x"00";
         main_loop : loop
@@ -373,9 +322,6 @@ begin
                     when CMD_READ_DATA_BYTES =>
                         if flash_status(0)='0' then
                             while SN='0' loop
-                                assert not VERBOSE
-                                    report "Reading byte: 0x" & hstr(flash_mem(int(flash_addr))) & " at 0x" & hstr(flash_addr, false)
-                                    severity NOTE;
                                 send_data_byte;
                                 flash_addr  := (flash_addr+1) mod BYTE_COUNT;
                                 if SN='0' then
@@ -418,10 +364,7 @@ begin
                                 next main_loop;
                             end if;
                             if flash_status(1 downto 0)="10" then
-                                assert not VERBOSE
-                                    report "Writing byte: 0x" & hstr(flash_data_byte) & " at 0x" & hstr(flash_addr, false)
-                                    severity NOTE;
-                                flash_mem(int(flash_addr))  <= flash_data_byte;
+                                write_flash(buf, flash_addr, flash_data_byte);
                                 flash_addr(15 downto 0)     := (flash_addr(15 downto 0)+1) mod BYTE_COUNT;
                             end if;
                             wait until rising_edge(C) or SN='1';
