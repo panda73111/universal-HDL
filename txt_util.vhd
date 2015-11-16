@@ -218,7 +218,7 @@ package body txt_util is
     function hex_to_int(c : character) return integer is
         variable i  : integer;
     begin
-        case c is
+        case to_upper(c) is
             when '0'    => i := 0;
             when '1'    => i := 1;
             when '2'    => i := 2;
