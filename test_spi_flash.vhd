@@ -16,6 +16,7 @@ use IEEE.NUMERIC_STD.ALL;
 use std.textio.all;
 use work.help_funcs.all;
 use work.txt_util.all;
+use work.mcs_parser.all;
 
 entity test_spi_flash is
     generic (
@@ -51,65 +52,42 @@ architecture behavioral of test_spi_flash is
     procedure fill_buffer(
             signal buf          : out buffer_type
     ) is
-        variable bytes_to_skip  : natural;
         file f                  : TEXT;
-        variable l              : line;
-        variable char           : character;
-        variable val            : std_ulogic_vector(3 downto 0);
-        variable buf_i          : natural range 0 to buffer_type'length-1;
-        variable good           : boolean;
-        variable byte_complete  : boolean;
+        variable mcs_address    : std_ulogic_vector(31 downto 0);
+        variable mcs_data       : std_ulogic_vector(7 downto 0);
+        variable mcs_valid      : boolean;
     begin
         assert not VERBOSE
             report "Filling the buffer at 0x" & hstr(buffer_start_addr)
             severity NOTE;
-        
+
         assert buffer_start_addr<BYTE_COUNT
             report "The SPI flash is smaller than the requested address"
             severity FAILURE;
 
         buf <= (others => x"00");
-        
-        if INIT_FILE_ADDR>buffer_start_addr+BUFFER_SIZE then
-            -- no init data for this address range
-            return;
-        end if;
-        
-        bytes_to_skip   := int(buffer_start_addr-INIT_FILE_ADDR);
-        if INIT_FILE_ADDR>buffer_start_addr then
-            bytes_to_skip   := 0;
-        end if;
 
         assert not VERBOSE
             report "Opening file: " & INIT_FILE_PATH
             severity NOTE;
 
-        buf_i           := 0;
-        byte_complete   := false;
-
+        mcs_init;
         file_open(f, INIT_FILE_PATH, read_mode);
-        file_loop : while not endfile(f) loop
-            readline(f, l);
-            read(l, char, good);
-            while good loop
-                val := hex_to_stdulv(char);
-                if byte_complete then
-                    buf(buf_i)(3 downto 0)  <= val;
 
-                    if bytes_to_skip=0 then
-                        buf_i   := buf_i+1;
-                    else
-                        bytes_to_skip   := bytes_to_skip-1;
-                    end if;
-                else
-                    buf(buf_i)(7 downto 4)  <= val;
-                end if;
+        mcs_read_byte(f, mcs_address, mcs_data, mcs_valid);
 
-                exit file_loop when buf_i=buffer_type'length;
+        read_loop : while mcs_valid loop
 
-                byte_complete   := not byte_complete;
-                read(l, char, good);
-            end loop;
+            exit read_loop when mcs_address>=buffer_start_addr+BUFFER_SIZE;
+
+            if mcs_address>=buffer_start_addr then
+                report "0x" & hstr(mcs_address-buffer_start_addr) & " <= 0x" & hstr(mcs_data)
+                    severity NOTE;
+                buf(int(mcs_address-buffer_start_addr)) <= mcs_data;
+            end if;
+
+            mcs_read_byte(f, mcs_address, mcs_data, mcs_valid);
+
         end loop;
 
         assert not VERBOSE
@@ -137,12 +115,12 @@ architecture behavioral of test_spi_flash is
 
         temp    := buf(int(addr-buffer_start_addr));
         data    := temp;
-        
+
         assert not VERBOSE
             report "Reading byte: 0x" & hstr(temp) & " at 0x" & hstr(addr, false)
             severity NOTE;
     end procedure;
-    
+
     procedure write_flash(
         signal buf      : inout buffer_type;
         variable addr   : std_ulogic_vector(23 downto 0);
@@ -236,10 +214,6 @@ begin
             end if;
         end procedure;
     begin
-        assert INIT_FILE_ADDR<BYTE_COUNT
-            report "The SPI flash is too small for the initialization file adrress"
-            severity FAILURE;
-        
         buffer_start_addr   := x"000000";
         fill_buffer(buf);
 
