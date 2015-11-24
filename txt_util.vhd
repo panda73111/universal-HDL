@@ -378,7 +378,7 @@ package body txt_util is
     begin
         for str_i in s'range loop
             c       := s(str_i);
-            hex_i   := s'length*4-1;
+            hex_i   := (s'length-str_i+1)*4-1;
             v(hex_i downto hex_i-3) := hex_to_stdulv(c);
             hex_i   := hex_i-4;
         end loop;
