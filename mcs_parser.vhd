@@ -72,7 +72,6 @@ package body mcs_parser is
                 if not good then valid := false; return; end if;
                 checksum_in_file    := hex_to_stdulv(hex);
                 checksum            := (not checksum)+1;
-                report "checksum, got: " & hstr(checksum_in_file) & " expected: " & hstr(checksum) severity NOTE;
                 assert checksum=checksum_in_file
                     report "Checksum error in .mcs file, line " & str(line_num)
                     severity FAILURE;
@@ -96,7 +95,6 @@ package body mcs_parser is
             if not good then valid := false; return; end if;
             byte_count  := int(hex_to_stdulv(hex));
             checksum    := checksum+byte_count;
-            report "byte count: " & str(byte_count) severity NOTE;
 
             read(l, hex2, good);
             if not good then valid := false; return; end if;
@@ -104,13 +102,11 @@ package body mcs_parser is
             address(15 downto 0)    := temp2;
             checksum                := checksum+temp2(15 downto 8);
             checksum                := checksum+temp2(7 downto 0);
-            report "address: 0x" & hstr(temp2) severity NOTE;
 
             read(l, hex, good);
             if not good then valid := false; return; end if;
             record_type := int(hex_to_stdulv(hex));
             checksum    := checksum+record_type;
-            report "record type: " & str(record_type) severity NOTE;
 
             case record_type is
 
@@ -146,7 +142,6 @@ package body mcs_parser is
                     addr_offset := temp2 & x"0000";
                     checksum    := checksum+temp2(15 downto 8);
                     checksum    := checksum+temp2(7 downto 0);
-                    report "address offset: " & hstr(temp2) severity NOTE;
 
                 when 5 => -- start linear address
                     report "Not implemented record type, line " & str(line_num)
@@ -161,7 +156,6 @@ package body mcs_parser is
             if not good then valid := false; return; end if;
             checksum_in_file    := hex_to_stdulv(hex);
             checksum            := (not checksum)+1;
-            report "checksum, got: " & hstr(checksum_in_file) & " expected: " & hstr(checksum) severity NOTE;
             assert checksum=checksum_in_file
                 report "Checksum error in .mcs file, line " & str(line_num)
                 severity FAILURE;
