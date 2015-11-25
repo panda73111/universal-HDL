@@ -74,7 +74,7 @@ architecture behavioral of test_spi_flash is
         mcs_init;
         file_open(f, INIT_FILE_PATH, read_mode);
 
-        mcs_read_byte(f, mcs_address, mcs_data, mcs_valid);
+        mcs_read_byte(f, mcs_address, mcs_data, mcs_valid, VERBOSE);
 
         read_loop : while mcs_valid loop
 
@@ -89,7 +89,7 @@ architecture behavioral of test_spi_flash is
                 buf(int(mcs_address-buffer_start_addr)) <= mcs_data;
             end if;
 
-            mcs_read_byte(f, mcs_address, mcs_data, mcs_valid);
+            mcs_read_byte(f, mcs_address, mcs_data, mcs_valid, VERBOSE);
 
         end loop;
 
