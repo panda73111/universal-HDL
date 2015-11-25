@@ -119,7 +119,6 @@ package body mcs_parser is
                     addr_offset := addr_offset+1;
                     bytes_left  := byte_count-1;
                     checksum    := checksum+temp;
-                    report "data byte: " & hstr(temp) severity NOTE;
                     if bytes_left>0 then
                         return;
                     end if;

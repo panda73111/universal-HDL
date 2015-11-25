@@ -81,8 +81,11 @@ architecture behavioral of test_spi_flash is
             exit read_loop when mcs_address>=buffer_start_addr+BUFFER_SIZE;
 
             if mcs_address>=buffer_start_addr then
-                report "0x" & hstr(mcs_address-buffer_start_addr) & " <= 0x" & hstr(mcs_data)
+                
+                assert not VERBOSE
+                    report "0x" & hstr(mcs_address-buffer_start_addr) & " <= 0x" & hstr(mcs_data)
                     severity NOTE;
+                
                 buf(int(mcs_address-buffer_start_addr)) <= mcs_data;
             end if;
 
