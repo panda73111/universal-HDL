@@ -41,8 +41,8 @@ architecture behavioral of test_spi_flash is
     type buffer_type is
         array(0 to BUFFER_SIZE-1) of
         std_ulogic_vector(7 downto 0);
-    signal buf  : buffer_type := (others => x"00");
-
+    
+    shared variable buf : buffer_type := (others => x"00");
     shared variable buffer_start_addr   : std_ulogic_vector(23 downto 0) := x"000000";
 
     constant BUFFER_MASK    :
@@ -50,7 +50,7 @@ architecture behavioral of test_spi_flash is
         stdulv(2**log2(buffer_type'length)-1, 24);
 
     procedure fill_buffer(
-            signal buf          : out buffer_type
+            buf : out buffer_type
     ) is
         file f                  : TEXT;
         variable mcs_address    : std_ulogic_vector(31 downto 0);
@@ -65,7 +65,7 @@ architecture behavioral of test_spi_flash is
             report "The SPI flash is smaller than the requested address"
             severity FAILURE;
 
-        buf <= (others => x"00");
+        buf := (others => x"00");
 
         assert not VERBOSE
             report "Opening file: " & INIT_FILE_PATH
@@ -86,7 +86,7 @@ architecture behavioral of test_spi_flash is
                     report "0x" & hstr(mcs_address-buffer_start_addr) & " <= 0x" & hstr(mcs_data)
                     severity NOTE;
                 
-                buf(int(mcs_address-buffer_start_addr)) <= mcs_data;
+                buf(int(mcs_address-buffer_start_addr)) := mcs_data;
             end if;
 
             mcs_read_byte(f, mcs_address, mcs_data, mcs_valid, VERBOSE);
@@ -102,9 +102,9 @@ architecture behavioral of test_spi_flash is
     end procedure;
 
     procedure read_flash(
-        signal buf      : inout buffer_type;
-        variable addr   : std_ulogic_vector(23 downto 0);
-        variable data   : out std_ulogic_vector(7 downto 0)
+        buf     : inout buffer_type;
+        addr    : in std_ulogic_vector(23 downto 0);
+        data    : out std_ulogic_vector(7 downto 0)
     ) is
         variable temp   : std_ulogic_vector(7 downto 0);
     begin
@@ -125,9 +125,9 @@ architecture behavioral of test_spi_flash is
     end procedure;
 
     procedure write_flash(
-        signal buf      : inout buffer_type;
-        variable addr   : std_ulogic_vector(23 downto 0);
-        variable data   : in std_ulogic_vector(7 downto 0)
+        buf     : inout buffer_type;
+        addr    : in std_ulogic_vector(23 downto 0);
+        data    : in std_ulogic_vector(7 downto 0)
     ) is
     begin
         assert not VERBOSE
