@@ -22,6 +22,13 @@ package mcs_parser is
         valid   : out boolean;
         verbose : in boolean
     );
+    
+    procedure mcs_write_byte(
+        file f  : TEXT;
+        address : in std_ulogic_vector(31 downto 0);
+        data    : in std_ulogic_vector(7 downto 0);
+        verbose : in boolean
+    );
 
 end package;
 
@@ -54,6 +61,11 @@ package body mcs_parser is
         variable checksum_in_file   : std_ulogic_vector(7 downto 0);
     begin
         address := addr_offset;
+        
+        if endfile(f) then
+            valid   := false;
+            return;
+        end if;
 
         if bytes_left>0 then
             read(l, hex, good);
@@ -196,9 +208,25 @@ package body mcs_parser is
             assert checksum=checksum_in_file
                 report "Checksum error in .mcs file, line " & str(line_num)
                 severity FAILURE;
+                
+            if endfile(f) then
+                return;
+            end if;
 
         end loop;
 
+    end procedure;
+    
+    procedure mcs_write_byte(
+        file f  : TEXT;
+        address : in std_ulogic_vector(31 downto 0);
+        data    : in std_ulogic_vector(7 downto 0);
+        verbose : in boolean
+    ) is
+        variable l      : line;
+        variable good   : boolean;
+    begin
+        
     end procedure;
 
 end;
