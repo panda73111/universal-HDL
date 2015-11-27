@@ -11,7 +11,7 @@ package linked_list is
     type ll_item_pointer_type is access ll_item_type;
     
     type ll_item_type is record
-        data        : string;
+        data        : line;
         prev_item   : ll_item_pointer_type;
         next_item   : ll_item_pointer_type;
     end record;
@@ -54,7 +54,7 @@ package linked_list is
     
     -- prints the given list
     procedure ll_report(
-        list    : in ll_item_pointer_type
+        list    : inout ll_item_pointer_type
     );
 
 end package;
@@ -83,15 +83,15 @@ package body linked_list is
         p   := list;
         
         if p=null then
-            list        := new ll_item_type;
-            list.data   := data;
+            list    := new ll_item_type;
+            write(list.data, data);
             return;
         end if;
         
         ll_get_last_item(p);
         
         p.next_item             := new ll_item_type;
-        p.next_item.data        := data;
+        write(p.next_item.data, data);
         p.next_item.prev_item   := p;
     end procedure;
     
@@ -106,8 +106,8 @@ package body linked_list is
         p   := list;
         
         if p=null then
-            list        := new ll_item_type;
-            list.data   := data;
+            list    := new ll_item_type;
+            write(list.data, data);
             return;
         end if;
         
@@ -118,7 +118,7 @@ package body linked_list is
         end loop;
         
         item            := new ll_item_type;
-        item.data       := data;
+        write(item.data, data);
         item.prev_item  := p.prev_item;
         item.next_item  := p;
         
@@ -131,25 +131,34 @@ package body linked_list is
         if p.next_item/=null then
             p.next_item.prev_item   := item;
         end if;
+        
+        if index=0 then
+            list    := item;
+        end if;
     end procedure;
     
     procedure ll_remove(
         item    : inout ll_item_pointer_type
     ) is
+        variable p  : ll_item_pointer_type;
     begin
-        if item=null then
+        p   := item;
+        
+        if p=null then
             return;
         end if;
         
-        if item.prev_item=null then
-            -- remove first item in list
-            item    := item.next_item;
-        else
-            -- remove inner item in list, close the gap
-            item.prev_item.next_item    := item.next_item;
-        end if;
+        -- remove inner item in list, close the gap
         
-        deallocate(item);
+        if p.prev_item/=null then
+            p.prev_item.next_item   := p.next_item;
+        end if;
+        if p.next_item/=null then
+            p.next_item.prev_item   := p.prev_item;
+        end if;
+        item    := p.next_item;
+        
+        deallocate(p);
     end procedure;
     
     procedure ll_remove(
@@ -157,22 +166,28 @@ package body linked_list is
         data    : in string
     ) is
         variable p  : ll_item_pointer_type;
+        variable i  : natural;
     begin
         p   := list;
+        i   := 0;
         
         if p=null then
             return;
         end if;
         
-        while p.data/=data and p.next_item/=null loop
+        while p.data.all/=data and p.next_item/=null loop
             p   := p.next_item;
+            i   := i+1;
         end loop;
         
-        if p.data/=data then
+        if p.data.all/=data then
             return;
         end if;
         
         ll_remove(p);
+        if i=0 then
+            list    := p;
+        end if;
     end procedure;
     
     procedure ll_remove(
@@ -196,19 +211,43 @@ package body linked_list is
         end loop;
         
         ll_remove(p);
+        if index=0 then
+            list    := p;
+        end if;
     end procedure;
     
     procedure ll_report(
-        list    : in ll_item_pointer_type
+        list    : inout ll_item_pointer_type
     ) is
-        variable p  : ll_item_pointer_type;
-        variable i  : natural;
+        variable p          : ll_item_pointer_type;
+        variable i          : natural;
+        variable l          : line;
     begin
+        if list=null then
+            report "[empty list]" severity NOTE;
+            return;
+        end if;
+        
         p   := list;
         i   := 0;
         
         while p/=null loop
-            report "[" & str(i) & "] " & p.data severity NOTE;
+            write(l, "[" & str(i) & "] " & p.data.all & " (");
+            
+            if p.prev_item/=null then
+                write(l, p.prev_item.data.all);
+            end if;
+            
+            write(l, "-");
+            
+            if p.next_item/=null then
+                write(l, p.next_item.data.all);
+            end if;
+            
+            write(l, ")");
+            
+            report l.all severity NOTE;
+            deallocate(l);
             p   := p.next_item;
             i   := i+1;
         end loop;
