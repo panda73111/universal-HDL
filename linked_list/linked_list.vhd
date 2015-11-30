@@ -112,7 +112,11 @@ package body linked_list is
         end if;
         
         for i in 1 to index loop
-            exit when p.next_item=null;
+            if p.next_item=null then
+                -- index is greater than the list size
+                ll_append(list, data);
+                return;
+            end if;
             
             p   := p.next_item;
         end loop;
@@ -128,9 +132,7 @@ package body linked_list is
             p.prev_item.next_item   := item;
         end if;
         
-        if p.next_item/=null then
-            p.next_item.prev_item   := item;
-        end if;
+        p.prev_item := item;
         
         if index=0 then
             list    := item;
@@ -224,7 +226,8 @@ package body linked_list is
         variable l          : line;
     begin
         if list=null then
-            report "[empty list]" severity NOTE;
+            write(l, "[empty list]");
+            writeline(OUTPUT, l);
             return;
         end if;
         
@@ -232,21 +235,8 @@ package body linked_list is
         i   := 0;
         
         while p/=null loop
-            write(l, "[" & str(i) & "] " & p.data.all & " (");
-            
-            if p.prev_item/=null then
-                write(l, p.prev_item.data.all);
-            end if;
-            
-            write(l, "-");
-            
-            if p.next_item/=null then
-                write(l, p.next_item.data.all);
-            end if;
-            
-            write(l, ")");
-            
-            report l.all severity NOTE;
+            write(l, "[" & str(i) & "] " & p.data.all);
+            writeline(OUTPUT, l);
             deallocate(l);
             p   := p.next_item;
             i   := i+1;
