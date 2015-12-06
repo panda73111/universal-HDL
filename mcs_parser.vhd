@@ -218,15 +218,62 @@ package body mcs_parser is
     end procedure;
     
     procedure mcs_write_byte(
-        file f  : TEXT;
+        list    : inout ll_item_pointer_type;
         address : in std_ulogic_vector(31 downto 0);
         data    : in std_ulogic_vector(7 downto 0);
         verbose : in boolean
     ) is
-        variable l      : line;
-        variable good   : boolean;
+        variable p              : ll_item_pointer_type;
+        variable item_num       : integer;
+        variable list_line      : string;
+        variable list_address   : std_ulogic_vector(31 downto 0);
+        variable byte_count     : natural;
+        variable record_type    : natural;
     begin
+        p               := list;
+        item_num        := -1;
+        list_address    := (others => '0');
         
+        while true loop
+            
+            item_num    := item_num+1;
+            list_line   := p.data.all;
+            
+            if list_line(1)/=':' then next; end if;
+            
+            byte_count                  := int(hex_to_stdulv(list_line(2 to 3)));
+            list_address(15 downto 0)   := hex_to_stdulv(list_line(4 to 7));
+            record_type                 := int(hex_to_stdulv(list_line(8 to 9)));
+            
+            case record_type is
+
+                when 0 => -- data
+                    null;
+
+                when 1 => -- end of file
+                    null;
+
+                when 2 => -- extended segment address
+                    report "Not implemented record type, line " & str(line_num)
+                        severity FAILURE;
+
+                when 3 => -- start segment address
+                    report "Not implemented record type, line " & str(line_num)
+                        severity FAILURE;
+
+                when 4 => -- extended linear address
+                    list_address    := hex_to_stdulv(list_line(10 to 13)) & "0000";
+
+                when 5 => -- start linear address
+                    report "Not implemented record type, line " & str(line_num)
+                        severity FAILURE;
+
+                when others =>
+                    report "Uknown record type in list, line " & str(line_num)
+                        severity FAILURE;
+            end case;
+            
+        end loop;
     end procedure;
 
 end;

@@ -44,6 +44,9 @@ architecture behavioral of test_spi_flash is
     
     shared variable buf : buffer_type := (others => x"00");
     shared variable buffer_start_addr   : std_ulogic_vector(23 downto 0) := x"000000";
+    
+    shared variable write_cache     : ll_item_pointer_type := null;
+    shared variable byte_written    : boolean := false;
 
     constant BUFFER_MASK    :
         std_ulogic_vector(23 downto 0) :=
