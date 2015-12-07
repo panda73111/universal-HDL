@@ -4,6 +4,7 @@ use IEEE.NUMERIC_STD.ALL;
 use std.textio.all;
 use work.help_funcs.all;
 use work.txt_util.all;
+use work.linked_list.all;
 
 package mcs_parser is
 
@@ -217,6 +218,44 @@ package body mcs_parser is
 
     end procedure;
     
+    function generate_mcs_data_line(
+        address : std_ulogic_vector(15 downto 0);
+        data    : std_ulogic_vector
+    ) return string is
+        variable mcs_line   : line;
+        variable byte_count : natural range 0 to 255;
+        variable checksum   : std_ulogic_vector(7 downto 0);
+    begin
+        mcs_line    := null;
+        
+        assert (data'length mod 8)=0
+            report "Whole bytes expected"
+            severity FAILURE;
+        
+        byte_count  := data'length/8;
+        
+        assert byte_count<=255
+            report "Too many bytes for one data line"
+            severity FAILURE;
+        
+        checksum    := stdulv(byte_count, 8)
+            +address(15 downto 8)
+            +address(7 downto 0);
+        
+        for i in 1 to byte_count loop
+            checksum    := checksum+data(i*8-1 downto (i-1)*8);
+        end loop;
+        checksum    := (not checksum)+1;
+        
+        write(mcs_line, ":");
+        write(mcs_line, hstr(byte_count));
+        write(mcs_line, hstr(address, false));
+        write(mcs_line, "00"); -- record type
+        write(mcs_line, hstr(data, false));
+        write(mcs_line, hstr(checksum));
+        return mcs_line.all;
+    end function;
+    
     procedure mcs_write_byte(
         list    : inout ll_item_pointer_type;
         address : in std_ulogic_vector(31 downto 0);
@@ -229,12 +268,14 @@ package body mcs_parser is
         variable list_address   : std_ulogic_vector(31 downto 0);
         variable byte_count     : natural;
         variable record_type    : natural;
+        variable mcs_line       : line;
     begin
         p               := list;
         item_num        := -1;
         list_address    := (others => '0');
+        mcs_line        := null;
         
-        while true loop
+        while p/=null loop
             
             item_num    := item_num+1;
             list_line   := p.data.all;
@@ -263,6 +304,12 @@ package body mcs_parser is
 
                 when 4 => -- extended linear address
                     list_address    := hex_to_stdulv(list_line(10 to 13)) & "0000";
+                    if list_address(31 downto 16)=address(31 downto 16) then
+                        ll_insert(list,
+                            generate_mcs_data_line(address(15 downto 0), data),
+                            item_num+1);
+                        return;
+                    end if;
 
                 when 5 => -- start linear address
                     report "Not implemented record type, line " & str(line_num)
@@ -272,6 +319,8 @@ package body mcs_parser is
                     report "Uknown record type in list, line " & str(line_num)
                         severity FAILURE;
             end case;
+            
+            p   := p.next_item;
             
         end loop;
     end procedure;
