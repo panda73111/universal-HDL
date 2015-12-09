@@ -23,9 +23,17 @@ package mcs_parser is
         valid   : out boolean;
         verbose : in boolean
     );
+
+    procedure mcs_read_byte(
+        list    : inout ll_item_pointer_type;
+        address : out std_ulogic_vector(31 downto 0);
+        data    : out std_ulogic_vector(7 downto 0);
+        valid   : out boolean;
+        verbose : in boolean
+    );
     
     procedure mcs_write_byte(
-        file f  : TEXT;
+        list    : inout ll_item_pointer_type;
         address : in std_ulogic_vector(31 downto 0);
         data    : in std_ulogic_vector(7 downto 0);
         verbose : in boolean
@@ -45,12 +53,16 @@ package body mcs_parser is
     end procedure;
 
     procedure mcs_read_byte(
+        list    : inout ll_item_pointer_type;
         file f  : TEXT;
         address : out std_ulogic_vector(31 downto 0);
         data    : out std_ulogic_vector(7 downto 0);
         valid   : out boolean;
         verbose : in boolean
     ) is
+        constant file_mode          : boolean := list=null;
+        
+        variable p                  : ll_item_pointer_type;
         variable char               : character;
         variable hex                : string(1 to 2);
         variable hex2               : string(1 to 4);
@@ -61,9 +73,13 @@ package body mcs_parser is
         variable temp2              : std_ulogic_vector(15 downto 0);
         variable checksum_in_file   : std_ulogic_vector(7 downto 0);
     begin
+        p       := list;
         address := addr_offset;
         
-        if endfile(f) then
+        if
+            (file_mode and endfile(f)) or
+            (not file_mode and list=null)
+        then
             valid   := false;
             return;
         end if;
@@ -109,7 +125,13 @@ package body mcs_parser is
             checksum    := x"00";
             char        := nul;
             while char/=':' loop
-                readline(f, l);
+                if file_mode then
+                    readline(f, l);
+                else
+                    l   := p.data;
+                    p   := p.next_item;
+                end if;
+                
                 line_num    := line_num+1;
                 read(l, char, good);
                 if not good then valid := false; return; end if;
@@ -217,6 +239,29 @@ package body mcs_parser is
         end loop;
 
     end procedure;
+
+    procedure mcs_read_byte(
+        file f  : TEXT;
+        address : out std_ulogic_vector(31 downto 0);
+        data    : out std_ulogic_vector(7 downto 0);
+        valid   : out boolean;
+        verbose : in boolean
+    ) is
+    begin
+        mcs_read_byte(null, f, address, data, valid, verbose);
+    end procedure;
+
+    procedure mcs_read_byte(
+        list    : inout ll_item_pointer_type;
+        address : out std_ulogic_vector(31 downto 0);
+        data    : out std_ulogic_vector(7 downto 0);
+        valid   : out boolean;
+        verbose : in boolean
+    ) is
+        file f  : TEXT;
+    begin
+        mcs_read_byte(list, f, address, data, valid, verbose);
+    end procedure;
     
     function generate_mcs_data_line(
         address : std_ulogic_vector(15 downto 0);
@@ -238,9 +283,9 @@ package body mcs_parser is
             report "Too many bytes for one data line"
             severity FAILURE;
         
-        checksum    := stdulv(byte_count, 8)
-            +address(15 downto 8)
-            +address(7 downto 0);
+        checksum    := stdulv(byte_count, 8)+
+            address(15 downto 8)+
+            address(7 downto 0);
         
         for i in 1 to byte_count loop
             checksum    := checksum+data(i*8-1 downto (i-1)*8);
@@ -248,10 +293,30 @@ package body mcs_parser is
         checksum    := (not checksum)+1;
         
         write(mcs_line, ":");
-        write(mcs_line, hstr(byte_count));
+        write(mcs_line, hstr(stdulv(byte_count, 8)));
         write(mcs_line, hstr(address, false));
-        write(mcs_line, "00"); -- record type
+        write(mcs_line, hstr(x"00")); -- record type
         write(mcs_line, hstr(data, false));
+        write(mcs_line, hstr(checksum));
+        return mcs_line.all;
+    end function;
+    
+    function generate_mcs_ext_addr_line(
+        address : std_ulogic_vector(15 downto 0)
+    ) return string is
+        variable mcs_line   : line;
+        variable checksum   : std_ulogic_vector(7 downto 0);
+    begin
+        mcs_line    := null;
+        
+        checksum    := x"02"
+            +address(15 downto 8)
+            +address(7 downto 0);
+        
+        checksum    := (not checksum)+1;
+        
+        write(mcs_line, ":02000004");
+        write(mcs_line, hstr(address, false));
         write(mcs_line, hstr(checksum));
         return mcs_line.all;
     end function;
@@ -264,27 +329,38 @@ package body mcs_parser is
     ) is
         variable p              : ll_item_pointer_type;
         variable item_num       : integer;
-        variable list_line      : string;
+        variable list_line      : line;
         variable list_address   : std_ulogic_vector(31 downto 0);
+        variable prev_ext_addr  : std_ulogic_vector(15 downto 0);
         variable byte_count     : natural;
         variable record_type    : natural;
         variable mcs_line       : line;
     begin
         p               := list;
+        prev_ext_addr   := x"0000";
         item_num        := -1;
-        list_address    := (others => '0');
+        list_address    := x"00000000";
         mcs_line        := null;
+        
+        if p=null then
+            assert not verbose
+                report "Empty list, adding an 'end of file' record"
+                severity NOTE;
+            
+            ll_append(list, ":00000001FF");
+            p   := list;
+        end if;
         
         while p/=null loop
             
             item_num    := item_num+1;
-            list_line   := p.data.all;
+            list_line   := p.data;
             
-            if list_line(1)/=':' then next; end if;
+            if list_line.all(1)/=':' then next; end if;
             
-            byte_count                  := int(hex_to_stdulv(list_line(2 to 3)));
-            list_address(15 downto 0)   := hex_to_stdulv(list_line(4 to 7));
-            record_type                 := int(hex_to_stdulv(list_line(8 to 9)));
+            byte_count                  := int(hex_to_stdulv(list_line.all(2 to 3)));
+            list_address(15 downto 0)   := hex_to_stdulv(list_line.all(4 to 7));
+            record_type                 := int(hex_to_stdulv(list_line.all(8 to 9)));
             
             case record_type is
 
@@ -292,7 +368,25 @@ package body mcs_parser is
                     null;
 
                 when 1 => -- end of file
-                    null;
+                    if prev_ext_addr/=address(31 downto 16) then
+                        assert not verbose
+                            report "Appending new extended address 0x" & hstr(address(31 downto 16))
+                            severity NOTE;
+                        
+                        ll_insert(list,
+                            generate_mcs_ext_addr_line(address(31 downto 16)),
+                            item_num);
+                        item_num    := item_num+1;
+                    end if;
+                    
+                    assert not verbose
+                        report "Appending data 0x" & hstr(data)
+                        severity NOTE;
+                    
+                    ll_insert(list,
+                        generate_mcs_data_line(address(15 downto 0), data),
+                        item_num);
+                    return;
 
                 when 2 => -- extended segment address
                     report "Not implemented record type, line " & str(line_num)
@@ -303,13 +397,19 @@ package body mcs_parser is
                         severity FAILURE;
 
                 when 4 => -- extended linear address
-                    list_address    := hex_to_stdulv(list_line(10 to 13)) & "0000";
-                    if list_address(31 downto 16)=address(31 downto 16) then
+                    list_address    := hex_to_stdulv(list_line.all(10 to 13)) & "0000";
+                    if prev_ext_addr=address(31 downto 16) then
+                        -- address matches the passed data block
+                        assert not verbose
+                            report "Appending data 0x" & hstr(data)
+                            severity NOTE;
+                        
                         ll_insert(list,
                             generate_mcs_data_line(address(15 downto 0), data),
-                            item_num+1);
+                            item_num);
                         return;
                     end if;
+                    prev_ext_addr   := list_address(31 downto 16);
 
                 when 5 => -- start linear address
                     report "Not implemented record type, line " & str(line_num)

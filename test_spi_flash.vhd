@@ -221,6 +221,12 @@ begin
             end if;
         end procedure;
     begin
+        mcs_write_byte(write_cache, x"00000000", x"AB", true);
+        ll_report(write_cache);
+        mcs_write_byte(write_cache, x"22000000", x"CC", true);
+        ll_report(write_cache);
+        assert false severity FAILURE;
+        
         buffer_start_addr   := x"000000";
         fill_buffer(buf);
 
