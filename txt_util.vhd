@@ -306,21 +306,25 @@ package body txt_util is
     end function;
     
     function hstr(slv : std_ulogic_vector; spaced : boolean) return string is
-        constant unsp_hexlen : natural  := (slv'length + 7) / 8 * 2;
-        constant sp_hexlen   : natural  := unsp_hexlen + (slv'length - 1) / 8;
+        constant unsp_hexlen : natural  := (slv'length+7) / 8 * 2;
+        constant sp_hexlen   : natural  := unsp_hexlen+(slv'length-1) / 8;
         variable hexlen      : natural range 1 to sp_hexlen;
         -- round slv to the next multiple of 4
-        variable padded_slv  : std_ulogic_vector(unsp_hexlen * 4 - 1 downto 0) := (others => '0');
+        variable padded_slv  : std_ulogic_vector(unsp_hexlen*4-1 downto 0) := (others => '0');
         variable hex         : string(1 to sp_hexlen);
         variable ch_i        : natural range 1 to sp_hexlen;
     begin
         hexlen := unsp_hexlen;
+        
         if spaced then
             hexlen := sp_hexlen;
         end if;
-        padded_slv(slv'high downto slv'low) := slv;
+        
+        padded_slv(slv'length-1 downto 0) := slv;
+        
         for i in unsp_hexlen downto 1 loop
-            case padded_slv(i * 4 - 1 downto i * 4 - 4) is
+            
+            case padded_slv(i*4-1 downto i*4-4) is
                 when "0000" => hex(ch_i) := '0';
                 when "0001" => hex(ch_i) := '1';
                 when "0010" => hex(ch_i) := '2';
@@ -342,15 +346,23 @@ package body txt_util is
                 when "XXXX" => hex(ch_i) := 'x';
                 when others => hex(ch_i) := '?';
             end case;
-            ch_i := ch_i + 1;
-            if spaced and (sp_hexlen - ch_i + 1) mod 3 = 0 and ch_i /= sp_hexlen + 1 then
+            ch_i := ch_i+1;
+            
+            if
+                spaced and
+                (sp_hexlen-ch_i+1) mod 3=0 and
+                ch_i/=sp_hexlen+1
+            then
                 hex(ch_i) := ' ';
-                ch_i      := ch_i + 1;
+                ch_i      := ch_i+1;
             end if;
+            
         end loop;
+        
         if not spaced then
             return hex(1 to unsp_hexlen);
         end if;
+        
         return hex;
     end function;
     
@@ -362,26 +374,33 @@ package body txt_util is
     begin
         v   := x"0";
         i   := hex_to_int(c);
+        
         for bit_i in 3 downto 0 loop
+            
             if i >= 2**bit_i then
                 v(bit_i)    := '1';
                 i           := i-2**bit_i;
             end if;
+            
         end loop;
+        
         return v;
     end function;
     
     function hex_to_stdulv(s : string) return std_ulogic_vector is
-        variable v      : std_ulogic_vector(s'length*4-1 downto 0);
-        variable hex_i  : natural;
-        variable c      : character;
+        variable v          : std_ulogic_vector(s'length*4-1 downto 0);
+        variable hex_high   : natural;
+        variable c          : character;
     begin
+        hex_high    := s'length*4-1;
         for str_i in s'range loop
-            c       := s(str_i);
-            hex_i   := (s'length-str_i+1)*4-1;
-            v(hex_i downto hex_i-3) := hex_to_stdulv(c);
-            hex_i   := hex_i-4;
+            
+            c                               := s(str_i);
+            v(hex_high downto hex_high-3)   := hex_to_stdulv(c);
+            hex_high                        := hex_high-4;
+            
         end loop;
+        
         return v;
     end function;
     
