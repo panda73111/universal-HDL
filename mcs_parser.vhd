@@ -10,18 +10,16 @@ package mcs_parser is
 
     shared variable addr_offset : std_ulogic_vector(31 downto 0) := x"00000000";
     shared variable bytes_left  : natural := 0;
+    shared variable item        : ll_item_pointer_type;
     shared variable l           : line := null;
     shared variable line_num    : natural := 0;
     shared variable checksum    : std_ulogic_vector(7 downto 0) := x"00";
 
     procedure mcs_init;
-
-    procedure mcs_read_byte(
-        file f  : TEXT;
-        address : out std_ulogic_vector(31 downto 0);
-        data    : out std_ulogic_vector(7 downto 0);
-        valid   : out boolean;
-        verbose : in boolean
+    procedure mcs_init(
+        filename    : in string;
+        list        : inout ll_item_pointer_type;
+        verbose     : in boolean
     );
 
     procedure mcs_read_byte(
@@ -47,22 +45,61 @@ package body mcs_parser is
     begin
         addr_offset := x"00000000";
         bytes_left  := 0;
+        item        := null;
         l           := null;
         line_num    := 0;
         checksum    := x"00";
     end procedure;
 
+    procedure mcs_init(
+        filename    : in string;
+        list        : inout ll_item_pointer_type;
+        verbose     : in boolean
+    ) is
+        file f      : TEXT;
+        variable l  : line;
+        variable p  : ll_item_pointer_type;
+    begin
+        mcs_init;
+        
+        list    := null;
+        p       := null;
+
+        assert not VERBOSE
+            report "Opening file: " & filename
+            severity NOTE;
+        
+        file_open(f, filename, READ_MODE);
+        
+        while not endfile(f) loop
+            
+            readline(f, l);
+            ll_append(p, l.all);
+            
+            if list=null then
+                list    := p;
+            end if;
+            
+            if p.next_item/=null then
+                p   := p.next_item;
+            end if;
+            
+        end loop;
+
+        assert not VERBOSE
+            report "Closing file: " & filename
+            severity NOTE;
+        
+        file_close(f);
+    end procedure;
+
     procedure mcs_read_byte(
         list    : inout ll_item_pointer_type;
-        file f  : TEXT;
         address : out std_ulogic_vector(31 downto 0);
         data    : out std_ulogic_vector(7 downto 0);
         valid   : out boolean;
         verbose : in boolean
     ) is
-        constant file_mode          : boolean := list=null;
-        
-        variable p                  : ll_item_pointer_type;
         variable char               : character;
         variable hex                : string(1 to 2);
         variable hex2               : string(1 to 4);
@@ -73,13 +110,17 @@ package body mcs_parser is
         variable temp2              : std_ulogic_vector(15 downto 0);
         variable checksum_in_file   : std_ulogic_vector(7 downto 0);
     begin
-        p       := list;
+        if item=null then
+            item    := list;
+        end if;
+        
         address := addr_offset;
         
-        if
-            (file_mode and endfile(f)) or
-            (not file_mode and list=null)
-        then
+        if list=null then
+            assert not verbose
+                report "Got an empty list, returning"
+                severity NOTE;
+            
             valid   := false;
             return;
         end if;
@@ -125,12 +166,8 @@ package body mcs_parser is
             checksum    := x"00";
             char        := nul;
             while char/=':' loop
-                if file_mode then
-                    readline(f, l);
-                else
-                    l   := p.data;
-                    p   := p.next_item;
-                end if;
+                l       := item.data;
+                item    := item.next_item;
                 
                 line_num    := line_num+1;
                 read(l, char, good);
@@ -232,35 +269,12 @@ package body mcs_parser is
                 report "Checksum error in .mcs file, line " & str(line_num)
                 severity FAILURE;
                 
-            if endfile(f) then
+            if item.next_item=null then
                 return;
             end if;
 
         end loop;
 
-    end procedure;
-
-    procedure mcs_read_byte(
-        file f  : TEXT;
-        address : out std_ulogic_vector(31 downto 0);
-        data    : out std_ulogic_vector(7 downto 0);
-        valid   : out boolean;
-        verbose : in boolean
-    ) is
-    begin
-        mcs_read_byte(null, f, address, data, valid, verbose);
-    end procedure;
-
-    procedure mcs_read_byte(
-        list    : inout ll_item_pointer_type;
-        address : out std_ulogic_vector(31 downto 0);
-        data    : out std_ulogic_vector(7 downto 0);
-        valid   : out boolean;
-        verbose : in boolean
-    ) is
-        file f  : TEXT;
-    begin
-        mcs_read_byte(list, f, address, data, valid, verbose);
     end procedure;
     
     function generate_mcs_data_line(

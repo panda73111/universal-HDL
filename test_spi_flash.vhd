@@ -21,7 +21,7 @@ use work.linked_list.all;
 
 entity test_spi_flash is
     generic (
-        BYTE_COUNT      : positive := 1024;
+        BYTE_COUNT      : positive := 16; --1024;
         INIT_FILE_PATH  : string := "";
         INIT_FILE_ADDR  : std_ulogic_vector(23 downto 0) := x"000000";
         BUFFER_SIZE     : positive := 256;
@@ -42,6 +42,8 @@ architecture behavioral of test_spi_flash is
     type buffer_type is
         array(0 to BUFFER_SIZE-1) of
         std_ulogic_vector(7 downto 0);
+    
+    shared variable mcs_list    : ll_item_pointer_type;
     
     shared variable buf : buffer_type := (others => x"00");
     shared variable buffer_start_addr   : std_ulogic_vector(23 downto 0) := x"000000";
@@ -71,14 +73,8 @@ architecture behavioral of test_spi_flash is
 
         buf := (others => x"00");
 
-        assert not VERBOSE
-            report "Opening file: " & INIT_FILE_PATH
-            severity NOTE;
-
         mcs_init;
-        file_open(f, INIT_FILE_PATH, read_mode);
-
-        mcs_read_byte(f, mcs_address, mcs_data, mcs_valid, VERBOSE);
+        mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE);
 
         read_loop : while mcs_valid loop
 
@@ -93,15 +89,9 @@ architecture behavioral of test_spi_flash is
                 buf(int(mcs_address-buffer_start_addr)) := mcs_data;
             end if;
 
-            mcs_read_byte(f, mcs_address, mcs_data, mcs_valid, VERBOSE);
+            mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE);
 
         end loop;
-
-        assert not VERBOSE
-            report "Closing file: " & INIT_FILE_PATH
-            severity NOTE;
-
-        file_close(f);
 
     end procedure;
 
@@ -110,17 +100,32 @@ architecture behavioral of test_spi_flash is
         addr    : in std_ulogic_vector(23 downto 0);
         data    : out std_ulogic_vector(7 downto 0)
     ) is
-        variable temp   : std_ulogic_vector(7 downto 0);
+        variable read_addr  : std_ulogic_vector(23 downto 0);
+        variable temp       : std_ulogic_vector(7 downto 0);
+        variable valid      : boolean;
     begin
-        if
-            addr<buffer_start_addr or
-            addr>=buffer_start_addr+BUFFER_SIZE
-        then
-            buffer_start_addr   := addr and not BUFFER_MASK;
-            fill_buffer(buf);
+        valid       := true;
+        read_addr   := x"000000";
+        
+        mcs_init;
+        while valid and read_addr/=addr loop
+            mcs_read_byte(write_cache, read_addr, temp, valid, VERBOSE);
+        end loop;
+        
+        if not valid then
+            
+            if
+                addr<buffer_start_addr or
+                addr>=buffer_start_addr+BUFFER_SIZE
+            then
+                buffer_start_addr   := addr and not BUFFER_MASK;
+                fill_buffer(buf);
+            end if;
+            
+            temp    := buf(int(addr-buffer_start_addr));
+            
         end if;
-
-        temp    := buf(int(addr-buffer_start_addr));
+        
         data    := temp;
 
         assert not VERBOSE
@@ -135,8 +140,10 @@ architecture behavioral of test_spi_flash is
     ) is
     begin
         assert not VERBOSE
-            report "Writing byte: 0x" & hstr(data) & " at 0x" & hstr(addr, false)
+            report "Writing byte: 0x" & hstr(data) & " at 0x" & hstr(addr, VERBOSE)
             severity NOTE;
+        
+        mcs_write_byte(write_cache, addr, data, true);
     end procedure;
 
 begin
@@ -221,14 +228,19 @@ begin
             end if;
         end procedure;
     begin
-        mcs_write_byte(write_cache, x"00000000", x"AB", true);
-        ll_report(write_cache);
-        mcs_write_byte(write_cache, x"22000000", x"CC", true);
-        ll_report(write_cache);
-        assert false severity FAILURE;
-        
+        mcs_init(INIT_FILE_PATH, mcs_list, VERBOSE);
         buffer_start_addr   := x"000000";
         fill_buffer(buf);
+        
+        read_flash(buf, x"0C0000", flash_data_byte);
+        report "read " & hstr(flash_data_byte);
+        write_flash(buf, x"0C0000", x"CC");
+        read_flash(buf, x"0C0000", flash_data_byte);
+        report "read " & hstr(flash_data_byte);
+        write_flash(buf, x"0C0000", x"44");
+        read_flash(buf, x"0C0000", flash_data_byte);
+        report "read " & hstr(flash_data_byte);
+        assert false severity FAILURE;
 
         flash_status    := x"00";
         main_loop : loop
