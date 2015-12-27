@@ -83,15 +83,15 @@ package body linked_list is
         p   := list;
         
         if p=null then
-            list    := new ll_item_type;
-            write(list.data, data);
+            list        := new ll_item_type;
+            list.data   := new string'(data);
             return;
         end if;
         
         ll_get_last_item(p);
         
         p.next_item             := new ll_item_type;
-        write(p.next_item.data, data);
+        p.next_item.data        := new string'(data);
         p.next_item.prev_item   := p;
     end procedure;
     
@@ -106,8 +106,8 @@ package body linked_list is
         p   := list;
         
         if p=null then
-            list    := new ll_item_type;
-            write(list.data, data);
+            list        := new ll_item_type;
+            list.data   := new string'(data);
             return;
         end if;
         
@@ -122,7 +122,7 @@ package body linked_list is
         end loop;
         
         item            := new ll_item_type;
-        write(item.data, data);
+        item.data       := new string'(data);
         item.prev_item  := p.prev_item;
         item.next_item  := p;
         
@@ -160,6 +160,7 @@ package body linked_list is
         end if;
         item    := p.next_item;
         
+        deallocate(p.data);
         deallocate(p);
     end procedure;
     
