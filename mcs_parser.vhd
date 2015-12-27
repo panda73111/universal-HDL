@@ -335,6 +335,35 @@ package body mcs_parser is
         return mcs_line.all;
     end function;
     
+    procedure modify_mcs_data_line(
+        mcs_line        : inout line;
+        data            : in std_ulogic_vector;
+        addr_offs       : in natural
+    ) is
+        variable mcs_line_byte_count    : natural;
+        variable data_byte_count        : natural;
+        variable index                  : natural;
+        variable data_before            : line;
+        variable data_after             : line;
+    begin
+        mcs_line_byte_count := int(hex_to_stdulv(mcs_line.all(2 to 3)));
+        data_byte_count     := data'length/8;
+        data_before         := null;
+        data_after          := null;
+        
+        if addr_offs>0 then
+            data_before := new string'(mcs_line.all(10 to 10+addr_offs));
+        end if;
+        
+        if mcs_line_byte_count<addr_offs+data_byte_count then
+            data_after  := new string'(mcs_line.all(
+                10+addr_offs+data_byte_count to 10+mcs_line_byte_count));
+        end if;
+        
+        assert false report "BEFORE: " & data_before.all severity NOTE;
+        assert false report "AFTER: " & data_after.all severity NOTE;
+    end procedure;
+    
     procedure mcs_write_byte(
         list    : inout ll_item_pointer_type;
         address : in std_ulogic_vector(31 downto 0);
@@ -379,7 +408,17 @@ package body mcs_parser is
             case record_type is
 
                 when 0 => -- data
-                    null;
+                    if
+                        address>=list_address and
+                        address<list_address+byte_count
+                    then
+                        assert not verbose
+                            report "Modifying data at 0x" & hstr(list_address)
+                            severity NOTE;
+                        
+                        modify_mcs_data_line(list_line,
+                            data, int(address-list_address));
+                    end if;
 
                 when 1 => -- end of file
                     if prev_ext_addr/=address(31 downto 16) then

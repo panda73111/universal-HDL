@@ -237,12 +237,24 @@ begin
         
         read_flash(buf, x"0C0000", flash_data_byte);
         report "read " & hstr(flash_data_byte);
+        ll_report(write_cache);
+        
         write_flash(buf, x"0C0000", x"CC");
+        ll_report(write_cache);
+        report "written 0xCC";
+        
         read_flash(buf, x"0C0000", flash_data_byte);
         report "read " & hstr(flash_data_byte);
+        ll_report(write_cache);
+        
         write_flash(buf, x"0C0000", x"44");
+        ll_report(write_cache);
+        report "written 0x44";
+        
         read_flash(buf, x"0C0000", flash_data_byte);
         report "read " & hstr(flash_data_byte);
+        ll_report(write_cache);
+        
         assert false severity FAILURE;
 
         flash_status    := x"00";
