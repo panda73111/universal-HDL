@@ -113,15 +113,16 @@ package body txt_util is
         variable c : character;
     begin
         case sl is
-            when 'U' => c := 'U';
-            when 'X' => c := 'X';
-            when '0' => c := '0';
-            when '1' => c := '1';
-            when 'Z' => c := 'Z';
-            when 'W' => c := 'W';
-            when 'L' => c := 'L';
-            when 'H' => c := 'H';
-            when '-' => c := '-';
+            when 'U'    => c    := 'U';
+            when 'X'    => c    := 'X';
+            when '0'    => c    := '0';
+            when '1'    => c    := '1';
+            when 'Z'    => c    := 'Z';
+            when 'W'    => c    := 'W';
+            when 'L'    => c    := 'L';
+            when 'H'    => c    := 'H';
+            when '-'    => c    := '-';
+            when others => c    := '?';
         end case;
         return c;
     end function;
@@ -142,12 +143,12 @@ package body txt_util is
     
     function str(slv : std_ulogic_vector) return string is
         variable result : string (1 to slv'length);
-        variable r      : integer;
+        variable r      : positive;
     begin
         r := 1;
         for i in slv'range loop
             result(r) := chr(slv(i));
-            r         := r + 1;
+            r         := r+1;
         end loop;
         return result;
     end function;
