@@ -100,15 +100,15 @@ architecture behavioral of test_spi_flash is
         addr    : in std_ulogic_vector(23 downto 0);
         data    : out std_ulogic_vector(7 downto 0)
     ) is
-        variable read_addr  : std_ulogic_vector(23 downto 0);
+        variable read_addr  : std_ulogic_vector(31 downto 0);
         variable temp       : std_ulogic_vector(7 downto 0);
         variable valid      : boolean;
     begin
         valid       := true;
-        read_addr   := x"000000";
+        read_addr   := x"00000000";
         
         mcs_init;
-        while valid and read_addr/=addr loop
+        while valid and read_addr/=x"00" & addr loop
             mcs_read_byte(write_cache, read_addr, temp, valid, VERBOSE);
         end loop;
         
@@ -138,12 +138,15 @@ architecture behavioral of test_spi_flash is
         addr    : in std_ulogic_vector(23 downto 0);
         data    : in std_ulogic_vector(7 downto 0)
     ) is
+        variable write_addr : std_ulogic_vector(31 downto 0);
     begin
         assert not VERBOSE
             report "Writing byte: 0x" & hstr(data) & " at 0x" & hstr(addr, VERBOSE)
             severity NOTE;
         
-        mcs_write_byte(write_cache, addr, data, true);
+        write_addr  := x"00" & addr;
+        
+        mcs_write_byte(write_cache, write_addr, data, VERBOSE);
     end procedure;
 
 begin
