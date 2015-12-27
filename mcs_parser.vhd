@@ -323,7 +323,7 @@ package body mcs_parser is
     begin
         mcs_line    := null;
         
-        checksum    := x"02"
+        checksum    := x"06"
             +address(15 downto 8)
             +address(7 downto 0);
         
