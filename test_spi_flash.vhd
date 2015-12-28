@@ -24,7 +24,7 @@ entity test_spi_flash is
         BYTE_COUNT      : positive := 16; --1024;
         INIT_FILE_PATH  : string := "";
         INIT_FILE_ADDR  : std_ulogic_vector(23 downto 0) := x"000000";
-        BUFFER_SIZE     : positive := 256;
+        BUFFER_SIZE     : positive := 4; --256;
         ERASE_TIME      : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
         PROGRAM_TIME    : time := 800 us;
         VERBOSE         : boolean := false
@@ -78,6 +78,9 @@ architecture behavioral of test_spi_flash is
 
         read_loop : while mcs_valid loop
 
+            report "MCS ADDR: " & hstr(mcs_address);
+            report "start addr: " & hstr(buffer_start_addr);
+            
             exit read_loop when mcs_address>=buffer_start_addr+BUFFER_SIZE;
 
             if mcs_address>=buffer_start_addr then
@@ -108,6 +111,7 @@ architecture behavioral of test_spi_flash is
         read_addr   := x"00000000";
         
         mcs_init;
+        
         while valid and read_addr/=x"00" & addr loop
             mcs_read_byte(write_cache, read_addr, temp, valid, VERBOSE);
         end loop;
@@ -243,15 +247,21 @@ begin
         ll_report(write_cache);
         report "written 0xCC";
         
-        read_flash(buf, x"0C0000", flash_data_byte);
+        write_flash(buf, x"0C0000", x"DD");
+        ll_report(write_cache);
+        report "written 0xDD";
+        
+        write_cache.next_item.data  := new string'(":0300000011223397");
+        
+        read_flash(buf, x"0C0001", flash_data_byte);
         report "read " & hstr(flash_data_byte);
         ll_report(write_cache);
         
-        write_flash(buf, x"0C0000", x"44");
+        write_flash(buf, x"0C0001", x"44");
         ll_report(write_cache);
         report "written 0x44";
         
-        read_flash(buf, x"0C0000", flash_data_byte);
+        read_flash(buf, x"0C0001", flash_data_byte);
         report "read " & hstr(flash_data_byte);
         ll_report(write_cache);
         

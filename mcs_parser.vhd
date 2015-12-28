@@ -11,7 +11,7 @@ package mcs_parser is
     shared variable addr_offset : std_ulogic_vector(31 downto 0) := x"00000000";
     shared variable bytes_left  : natural := 0;
     shared variable item        : ll_item_pointer_type;
-    shared variable l           : line := null;
+    shared variable char_index  : natural := 0;
     shared variable line_num    : natural := 0;
     shared variable checksum    : std_ulogic_vector(7 downto 0) := x"00";
 
@@ -46,8 +46,8 @@ package body mcs_parser is
         addr_offset := x"00000000";
         bytes_left  := 0;
         item        := null;
-        l           := null;
-        line_num    := 0;
+        char_index  := 0;
+        line_num    := 1;
         checksum    := x"00";
     end procedure;
 
@@ -100,12 +100,11 @@ package body mcs_parser is
         valid   : out boolean;
         verbose : in boolean
     ) is
-        variable char               : character;
+        variable mcs_line           : line;
         variable hex                : string(1 to 2);
         variable hex2               : string(1 to 4);
         variable byte_count         : natural;
         variable record_type        : natural;
-        variable good               : boolean;
         variable temp               : std_ulogic_vector(7 downto 0);
         variable temp2              : std_ulogic_vector(15 downto 0);
         variable checksum_in_file   : std_ulogic_vector(7 downto 0);
@@ -126,26 +125,29 @@ package body mcs_parser is
         end if;
 
         if bytes_left>0 then
-            read(l, hex, good);
-            if not good then
+            mcs_line    := item.data;
+            if mcs_line.all'length<char_index+1 then
                 valid       := false;
                 bytes_left  := 0;
                 return;
             end if;
+            hex         := mcs_line.all(char_index to char_index+1);
             valid       := true;
             temp        := hex_to_stdulv(hex);
             data        := temp;
             addr_offset := addr_offset+1;
             bytes_left  := bytes_left-1;
             checksum    := checksum+temp;
+            char_index  := char_index+2;
             
             assert not verbose
                 report "data byte: " & hstr(temp)
                 severity NOTE;
 
             if bytes_left=0 then
-                read(l, hex, good);
-                if not good then valid := false; return; end if;
+                if mcs_line.all'length<char_index+1 then valid := false; return; end if;
+                
+                hex                 := mcs_line.all(char_index to char_index+1);
                 checksum_in_file    := hex_to_stdulv(hex);
                 checksum            := (not checksum)+1;
                 
@@ -156,35 +158,41 @@ package body mcs_parser is
                 assert checksum=checksum_in_file
                     report "Checksum error in .mcs file, line " & str(line_num)
                     severity FAILURE;
+                
+                item        := item.next_item;
+                line_num    := line_num+1;
+                
+                if item=null then valid := false; end if;
             end if;
-
+            
             return;
         end if;
 
         while true loop
 
+            mcs_line    := item.data;
             checksum    := x"00";
-            char        := nul;
-            while char/=':' loop
-                l       := item.data;
-                item    := item.next_item;
-                
+            while mcs_line.all(1)/=':' loop
+                item        := item.next_item;
+                mcs_line    := item.data;
                 line_num    := line_num+1;
-                read(l, char, good);
-                if not good then valid := false; return; end if;
+                
+                if item=null then valid := false; return; end if;
             end loop;
 
-            read(l, hex, good);
-            if not good then valid := false; return; end if;
+            if mcs_line.all'length<3 then valid := false; return; end if;
+            
+            hex         := mcs_line.all(2 to 3);
             byte_count  := int(hex_to_stdulv(hex));
             checksum    := checksum+byte_count;
             
             assert not verbose
                 report "byte count: " & str(byte_count)
                 severity NOTE;
-
-            read(l, hex2, good);
-            if not good then valid := false; return; end if;
+            
+            if mcs_line.all'length<7 then valid := false; return; end if;
+            
+            hex2                    := mcs_line.all(4 to 7);
             temp2                   := hex_to_stdulv(hex2);
             address(15 downto 0)    := temp2;
             checksum                := checksum+temp2(15 downto 8);
@@ -194,8 +202,9 @@ package body mcs_parser is
                 report "address: 0x" & hstr(temp2)
                 severity NOTE;
 
-            read(l, hex, good);
-            if not good then valid := false; return; end if;
+            if mcs_line.all'length<9 then valid := false; return; end if;
+            
+            hex         := mcs_line.all(8 to 9);
             record_type := int(hex_to_stdulv(hex));
             checksum    := checksum+record_type;
             
@@ -206,14 +215,16 @@ package body mcs_parser is
             case record_type is
 
                 when 0 => -- data
-                    read(l, hex, good);
-                    if not good then valid := false; return; end if;
+                    if mcs_line.all'length<11 then valid := false; return; end if;
+                    
+                    hex         := mcs_line.all(10 to 11);
                     valid       := true;
                     temp        := hex_to_stdulv(hex);
                     data        := temp;
                     addr_offset := addr_offset+1;
                     bytes_left  := byte_count-1;
                     checksum    := checksum+temp;
+                    char_index  := 12;
                     
                     assert not verbose
                         report "data byte: " & hstr(temp)
@@ -224,7 +235,8 @@ package body mcs_parser is
                     end if;
 
                 when 1 => -- end of file
-                    valid   := false;
+                    valid       := false;
+                    char_index  := 10;
 
                 when 2 => -- extended segment address
                     report "Not implemented record type, line " & str(line_num)
@@ -235,13 +247,15 @@ package body mcs_parser is
                         severity FAILURE;
 
                 when 4 => -- extended linear address
-                    read(l, hex2, good);
-                    if not good then valid := false; return; end if;
+                    if mcs_line.all'length<13 then valid := false; return; end if;
+                    
+                    hex2        := mcs_line.all(10 to 13);
                     temp2       := hex_to_stdulv(hex2);
                     addr_offset := temp2 & x"0000";
                     address     := addr_offset;
                     checksum    := checksum+temp2(15 downto 8);
                     checksum    := checksum+temp2(7 downto 0);
+                    char_index  := 14;
                     
                     assert not verbose
                         report "address offset: " & hstr(temp2)
@@ -256,8 +270,9 @@ package body mcs_parser is
                         severity FAILURE;
             end case;
 
-            read(l, hex, good);
-            if not good then valid := false; return; end if;
+            if mcs_line.all'length<char_index+1 then valid := false; return; end if;
+            
+            hex                 := mcs_line.all(char_index to char_index+1);
             checksum_in_file    := hex_to_stdulv(hex);
             checksum            := (not checksum)+1;
             
@@ -268,11 +283,12 @@ package body mcs_parser is
             assert checksum=checksum_in_file
                 report "Checksum error in .mcs file, line " & str(line_num)
                 severity FAILURE;
-                
-            if item.next_item=null then
-                return;
-            end if;
-
+            
+            item        := item.next_item;
+            line_num    := line_num+1;
+            
+            if item=null then valid := false; return; end if;
+            
         end loop;
 
     end procedure;
@@ -340,28 +356,46 @@ package body mcs_parser is
         data            : in std_ulogic_vector;
         addr_offs       : in natural
     ) is
-        variable mcs_line_byte_count    : natural;
-        variable data_byte_count        : natural;
-        variable index                  : natural;
+        variable mcs_line_byte_count    : positive range 1 to 255;
+        variable mcs_line_addr_hex      : string(1 to 4);
+        variable data_byte_count        : positive range 1 to 255;
         variable data_before            : line;
         variable data_after             : line;
+        variable new_byte_count         : positive range 1 to 255;
+        variable checksum               : std_ulogic_vector(7 downto 0);
     begin
         mcs_line_byte_count := int(hex_to_stdulv(mcs_line.all(2 to 3)));
+        mcs_line_addr_hex   := mcs_line.all(4 to 7);
         data_byte_count     := data'length/8;
-        data_before         := null;
-        data_after          := null;
+        data_before         := new string'("");
+        data_after          := new string'("");
+        new_byte_count      := max(mcs_line_byte_count, addr_offs+data_byte_count);
         
         if addr_offs>0 then
-            data_before := new string'(mcs_line.all(10 to 10+addr_offs));
+            data_before := new string'(mcs_line.all(10 to 10+addr_offs*2-1));
         end if;
         
-        if mcs_line_byte_count<addr_offs+data_byte_count then
+        if addr_offs+data_byte_count<mcs_line_byte_count then
             data_after  := new string'(mcs_line.all(
-                10+addr_offs+data_byte_count to 10+mcs_line_byte_count));
+                10+(addr_offs+data_byte_count)*2 to 10+mcs_line_byte_count*2-1));
         end if;
         
-        assert false report "BEFORE: " & data_before.all severity NOTE;
-        assert false report "AFTER: " & data_after.all severity NOTE;
+        mcs_line    := null;
+        write(mcs_line, ":");
+        write(mcs_line, hstr(stdulv(new_byte_count, 8)));
+        write(mcs_line, mcs_line_addr_hex);
+        write(mcs_line, hstr(x"00")); -- record type
+        write(mcs_line, data_before.all);
+        write(mcs_line, hstr(data, false));
+        write(mcs_line, data_after.all);
+        
+        checksum    := x"00";
+        for i in 1 to 1+2+1+new_byte_count loop
+            checksum    := checksum+hex_to_stdulv(mcs_line.all(i*2 to i*2+1));
+        end loop;
+        checksum    := (not checksum)+1;
+        
+        write(mcs_line, hstr(checksum));
     end procedure;
     
     procedure mcs_write_byte(
@@ -416,8 +450,10 @@ package body mcs_parser is
                             report "Modifying data at 0x" & hstr(list_address)
                             severity NOTE;
                         
-                        modify_mcs_data_line(list_line,
+                        modify_mcs_data_line(p.data,
                             data, int(address-list_address));
+                        
+                        return;
                     end if;
 
                 when 1 => -- end of file
