@@ -28,24 +28,9 @@ package TRANSPORT_LAYER_PKG is
         others => (others => '0')
     );
     
-    function packet_record_type_to_vector(d : in packet_record_type) return std_ulogic_vector is
-        variable v  : std_ulogic_vector(log2(BUFFERED_PACKETS) downto 0);
-    begin
-        v   := (others => '0');
-        if d.is_buffered then
-            v(0)    := '1';
-        end if;
-        v(v'high downto 1)  := stdulv(d.slot, log2(BUFFERED_PACKETS));
-        return v;
-    end function;
+    function packet_record_type_to_vector(d : in packet_record_type) return std_ulogic_vector;
     
-    function vector_to_packet_record_type(v : in std_ulogic_vector) return packet_record_type is
-        variable d  : packet_record_type;
-    begin
-        d.is_buffered   := v(0)='1';
-        d.slot          := int(v(v'high downto 1));
-        return d;
-    end function;
+    function vector_to_packet_record_type(v : in std_ulogic_vector) return packet_record_type;
     
     --- packet meta information records, for resending packets ---
     
@@ -70,5 +55,24 @@ package TRANSPORT_LAYER_PKG is
 end TRANSPORT_LAYER_PKG;
 
 package body TRANSPORT_LAYER_PKG is
+    
+    function packet_record_type_to_vector(d : in packet_record_type) return std_ulogic_vector is
+        variable v  : std_ulogic_vector(log2(BUFFERED_PACKETS) downto 0);
+    begin
+        v   := (others => '0');
+        if d.is_buffered then
+            v(0)    := '1';
+        end if;
+        v(v'high downto 1)  := stdulv(d.slot, log2(BUFFERED_PACKETS));
+        return v;
+    end function;
+    
+    function vector_to_packet_record_type(v : in std_ulogic_vector) return packet_record_type is
+        variable d  : packet_record_type;
+    begin
+        d.is_buffered   := v(0)='1';
+        d.slot          := int(v(v'high downto 1));
+        return d;
+    end function;
     
 end TRANSPORT_LAYER_PKG;

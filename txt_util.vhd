@@ -313,7 +313,8 @@ package body txt_util is
         -- round slv to the next multiple of 4
         variable padded_slv  : std_ulogic_vector(unsp_hexlen*4-1 downto 0) := (others => '0');
         variable hex         : string(1 to sp_hexlen);
-        variable ch_i        : natural range 1 to sp_hexlen;
+        variable ch_i        : natural range 1 to sp_hexlen+1;
+        variable slice       : std_ulogic_vector(3 downto 0);
     begin
         hexlen := unsp_hexlen;
         
@@ -325,7 +326,8 @@ package body txt_util is
         
         for i in unsp_hexlen downto 1 loop
             
-            case padded_slv(i*4-1 downto i*4-4) is
+            slice   := padded_slv(i*4-1 downto i*4-4);
+            case slice is
                 when "0000" => hex(ch_i) := '0';
                 when "0001" => hex(ch_i) := '1';
                 when "0010" => hex(ch_i) := '2';
@@ -390,7 +392,7 @@ package body txt_util is
     
     function hex_to_stdulv(s : string) return std_ulogic_vector is
         variable v          : std_ulogic_vector(s'length*4-1 downto 0);
-        variable hex_high   : natural;
+        variable hex_high   : integer range -1 to s'length*4-1;
         variable c          : character;
     begin
         hex_high    := s'length*4-1;

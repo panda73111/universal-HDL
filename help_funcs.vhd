@@ -5,8 +5,8 @@ use IEEE.NUMERIC_STD.ALL;
 
 package help_funcs is
 
-    function max(l, r : natural) return natural;
-    function min(l, r : natural) return natural;
+    function maximum(l, r : natural) return natural;
+    function minimum(l, r : natural) return natural;
     function "+"(v : std_ulogic_vector; n : natural) return std_ulogic_vector;
     function "+"(v : std_ulogic_vector; u : unsigned) return std_ulogic_vector;
     function "+"(l : std_ulogic_vector; r : std_ulogic) return std_ulogic_vector;
@@ -79,7 +79,7 @@ end help_funcs;
 
 package body help_funcs is
     
-    function max(l, r : natural) return natural is
+    function maximum(l, r : natural) return natural is
     begin
         if l > r then
             return l;
@@ -87,7 +87,7 @@ package body help_funcs is
         return r;
     end function;
     
-    function min(l, r : natural) return natural is
+    function minimum(l, r : natural) return natural is
     begin
         if l < r then
             return l;
@@ -491,7 +491,7 @@ package body help_funcs is
     end function;
     
     function arith_mean(vl, vr : std_ulogic_vector) return std_ulogic_vector is
-        constant bits   : integer := max(vl'length, vr'length);
+        constant bits   : integer := maximum(vl'length, vr'length);
         variable ul, ur : unsigned(bits downto 0);
         variable sum    : std_ulogic_vector(bits downto 0);
     begin
