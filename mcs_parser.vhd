@@ -34,10 +34,10 @@ package mcs_parser is
         verbose : in boolean
     );
     
-    procedure mcs_write_byte(
+    procedure mcs_write(
         list    : inout ll_item_pointer_type;
         address : in std_ulogic_vector(31 downto 0);
-        data    : in std_ulogic_vector(7 downto 0);
+        data    : in std_ulogic_vector;
         verbose : in boolean
     );
 
@@ -405,21 +405,26 @@ package body mcs_parser is
         write(mcs_line, hstr(checksum));
     end procedure;
     
-    procedure mcs_write_byte(
+    procedure mcs_write(
         list    : inout ll_item_pointer_type;
         address : in std_ulogic_vector(31 downto 0);
-        data    : in std_ulogic_vector(7 downto 0);
+        data    : in std_ulogic_vector;
         verbose : in boolean
     ) is
-        variable p              : ll_item_pointer_type;
-        variable item_num       : integer;
-        variable list_line      : line;
-        variable list_address   : std_ulogic_vector(31 downto 0);
-        variable prev_ext_addr  : std_ulogic_vector(15 downto 0);
-        variable byte_count     : natural;
-        variable record_type    : natural;
-        variable mcs_line       : line;
+        variable desc_data          : std_ulogic_vector(data'length-1 downto 0);
+        variable p                  : ll_item_pointer_type;
+        variable item_num           : integer;
+        variable list_line          : line;
+        variable list_address       : std_ulogic_vector(31 downto 0);
+        variable prev_ext_addr      : std_ulogic_vector(15 downto 0);
+        variable byte_count         : natural range 0 to 255;
+        variable record_type        : natural range 0 to 255;
+        variable mcs_line           : line;
+        variable addr_offs          : natural range 0 to 255;
+        variable data_byte_count    : positive range 1 to 255;
+        variable slice_byte_count   : positive range 1 to 255;
     begin
+        desc_data       := data;
         p               := list;
         prev_ext_addr   := x"0000";
         item_num        := -1;
@@ -451,14 +456,27 @@ package body mcs_parser is
                 when 0 => -- data
                     if
                         address>=list_address and
-                        address<list_address+byte_count
+                        address<list_address+WRITE_RECORD_SIZE
                     then
                         assert not verbose
                             report "Modifying data at 0x" & hstr(list_address)
                             severity NOTE;
                         
+                        addr_offs           := int(address-list_address);
+                        data_byte_count     := data'length/8;
+                        slice_byte_count    := minimum(data_byte_count, addr_offs+WRITE_RECORD_SIZE);
+                        
                         modify_mcs_data_line(p.data,
-                            data, int(address-list_address));
+                            desc_data(desc_data'high downto desc_data'high-slice_byte_count*8+1),
+                            addr_offs);
+                        
+                        -- if data_byte_count>slice_byte_count then
+                            -- -- write the rest of the data (the second data slice)
+                            -- -- into the next data record
+                            -- mcs_write(list, address+slice_byte_count,
+                                -- data(data'high-slice_byte_count*8 downto data'low),
+                                -- verbose);
+                        -- end if;
                         
                         return;
                     end if;
@@ -476,11 +494,11 @@ package body mcs_parser is
                     end if;
                     
                     assert not verbose
-                        report "Appending data 0x" & hstr(data)
+                        report "Appending data 0x" & hstr(desc_data)
                         severity NOTE;
                     
                     ll_insert(list,
-                        generate_mcs_data_line(address(15 downto 0), data),
+                        generate_mcs_data_line(address(15 downto 0), desc_data),
                         item_num);
                     return;
 
@@ -493,15 +511,15 @@ package body mcs_parser is
                         severity FAILURE;
 
                 when 4 => -- extended linear address
-                    list_address    := hex_to_stdulv(list_line.all(10 to 13)) & "0000";
+                    list_address    := hex_to_stdulv(list_line.all(10 to 13)) & x"0000";
                     if prev_ext_addr=address(31 downto 16) then
                         -- address matches the passed data block
                         assert not verbose
-                            report "Appending data 0x" & hstr(data)
+                            report "Appending data 0x" & hstr(desc_data)
                             severity NOTE;
                         
                         ll_insert(list,
-                            generate_mcs_data_line(address(15 downto 0), data),
+                            generate_mcs_data_line(address(15 downto 0), desc_data),
                             item_num);
                         return;
                     end if;

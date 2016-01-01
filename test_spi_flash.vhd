@@ -150,7 +150,7 @@ architecture behavioral of test_spi_flash is
         
         write_addr  := x"00" & addr;
         
-        mcs_write_byte(write_cache, write_addr, data, VERBOSE);
+        mcs_write(write_cache, write_addr, data, VERBOSE);
     end procedure;
 
 begin
@@ -251,7 +251,9 @@ begin
         ll_report(write_cache);
         report "written 0xDD";
         
-        write_cache.next_item.data  := new string'(":0300000011223397");
+        mcs_write(write_cache, x"000C0000", x"112233", VERBOSE);
+        ll_report(write_cache);
+        report "written 0x112233";
         
         read_flash(buf, x"0C0001", flash_data_byte);
         report "read " & hstr(flash_data_byte);
@@ -264,6 +266,10 @@ begin
         read_flash(buf, x"0C0001", flash_data_byte);
         report "read " & hstr(flash_data_byte);
         ll_report(write_cache);
+        
+        write_flash(buf, x"0C0005", x"44");
+        ll_report(write_cache);
+        report "written 0x445566";
         
         assert false severity FAILURE;
 
