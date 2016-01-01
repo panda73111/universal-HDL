@@ -7,6 +7,10 @@ use work.txt_util.all;
 use work.linked_list.all;
 
 package mcs_parser is
+    
+    -- the number of bytes that are written into one mcs line
+    constant WRITE_RECORD_SIZE  : positive range 1 to 255 := 16;
+    constant END_OF_FILE_RECORD : string := ":00000001FF";
 
     shared variable addr_offset : std_ulogic_vector(31 downto 0) := x"00000000";
     shared variable bytes_left  : natural := 0;
@@ -297,6 +301,7 @@ package body mcs_parser is
         address : std_ulogic_vector(15 downto 0);
         data    : std_ulogic_vector
     ) return string is
+        constant COLON      : character := ':';
         variable mcs_line   : line;
         variable byte_count : natural range 0 to 255;
         variable checksum   : std_ulogic_vector(7 downto 0);
@@ -322,7 +327,7 @@ package body mcs_parser is
         end loop;
         checksum    := (not checksum)+1;
         
-        write(mcs_line, ":");
+        write(mcs_line, COLON);
         write(mcs_line, hstr(stdulv(byte_count, 8)));
         write(mcs_line, hstr(address, false));
         write(mcs_line, hstr(x"00")); -- record type
@@ -334,6 +339,7 @@ package body mcs_parser is
     function generate_mcs_ext_addr_line(
         address : std_ulogic_vector(15 downto 0)
     ) return string is
+        constant PREFIX     : string := ":02000004";
         variable mcs_line   : line;
         variable checksum   : std_ulogic_vector(7 downto 0);
     begin
@@ -345,7 +351,7 @@ package body mcs_parser is
         
         checksum    := (not checksum)+1;
         
-        write(mcs_line, ":02000004");
+        write(mcs_line, PREFIX);
         write(mcs_line, hstr(address, false));
         write(mcs_line, hstr(checksum));
         return mcs_line.all;
@@ -354,8 +360,9 @@ package body mcs_parser is
     procedure modify_mcs_data_line(
         mcs_line        : inout line;
         data            : in std_ulogic_vector;
-        addr_offs       : in natural
+        addr_offs       : in natural range 0 to 255
     ) is
+        constant COLON                  : character := ':';
         variable mcs_line_byte_count    : positive range 1 to 255;
         variable mcs_line_addr_hex      : string(1 to 4);
         variable data_byte_count        : positive range 1 to 255;
@@ -369,7 +376,7 @@ package body mcs_parser is
         data_byte_count     := data'length/8;
         data_before         := new string'("");
         data_after          := new string'("");
-        new_byte_count      := max(mcs_line_byte_count, addr_offs+data_byte_count);
+        new_byte_count      := maximum(mcs_line_byte_count, addr_offs+data_byte_count);
         
         if addr_offs>0 then
             data_before := new string'(mcs_line.all(10 to 10+addr_offs*2-1));
@@ -381,7 +388,7 @@ package body mcs_parser is
         end if;
         
         mcs_line    := null;
-        write(mcs_line, ":");
+        write(mcs_line, COLON);
         write(mcs_line, hstr(stdulv(new_byte_count, 8)));
         write(mcs_line, mcs_line_addr_hex);
         write(mcs_line, hstr(x"00")); -- record type
@@ -424,7 +431,7 @@ package body mcs_parser is
                 report "Empty list, adding an 'end of file' record"
                 severity NOTE;
             
-            ll_append(list, ":00000001FF");
+            ll_append(list, END_OF_FILE_RECORD);
             p   := list;
         end if;
         

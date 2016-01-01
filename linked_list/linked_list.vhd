@@ -222,12 +222,13 @@ package body linked_list is
     procedure ll_report(
         list    : inout ll_item_pointer_type
     ) is
+        constant EMPTY_LIST : string := "[empty list]";
         variable p          : ll_item_pointer_type;
         variable i          : natural;
         variable l          : line;
     begin
         if list=null then
-            write(l, "[empty list]");
+            write(l, EMPTY_LIST);
             writeline(OUTPUT, l);
             return;
         end if;
