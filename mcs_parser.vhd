@@ -424,6 +424,10 @@ package body mcs_parser is
         variable data_byte_count    : positive range 1 to 255;
         variable slice_byte_count   : positive range 1 to 255;
     begin
+        assert (data'length mod 8)=0
+            report "Whole bytes expected"
+            severity FAILURE;
+        
         desc_data       := data;
         p               := list;
         prev_ext_addr   := x"0000";
@@ -470,13 +474,13 @@ package body mcs_parser is
                             desc_data(desc_data'high downto desc_data'high-slice_byte_count*8+1),
                             addr_offs);
                         
-                        -- if data_byte_count>slice_byte_count then
-                            -- -- write the rest of the data (the second data slice)
-                            -- -- into the next data record
-                            -- mcs_write(list, address+slice_byte_count,
-                                -- data(data'high-slice_byte_count*8 downto data'low),
-                                -- verbose);
-                        -- end if;
+                        if data_byte_count>slice_byte_count then
+                            -- write the rest of the data (the second data slice)
+                            -- into the next data record
+                            mcs_write(list, address+slice_byte_count,
+                                desc_data(desc_data'high-slice_byte_count*8 downto desc_data'low),
+                                verbose);
+                        end if;
                         
                         return;
                     end if;

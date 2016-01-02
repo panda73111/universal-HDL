@@ -21,10 +21,10 @@ use work.linked_list.all;
 
 entity test_spi_flash is
     generic (
-        BYTE_COUNT      : positive := 16; --1024;
+        BYTE_COUNT      : positive := 1024;
         INIT_FILE_PATH  : string := "";
         INIT_FILE_ADDR  : std_ulogic_vector(23 downto 0) := x"000000";
-        BUFFER_SIZE     : positive := 4; --256;
+        BUFFER_SIZE     : positive := 256;
         ERASE_TIME      : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
         PROGRAM_TIME    : time := 800 us;
         VERBOSE         : boolean := false
@@ -78,9 +78,6 @@ architecture behavioral of test_spi_flash is
 
         read_loop : while mcs_valid loop
 
-            report "MCS ADDR: " & hstr(mcs_address);
-            report "start addr: " & hstr(buffer_start_addr);
-            
             exit read_loop when mcs_address>=buffer_start_addr+BUFFER_SIZE;
 
             if mcs_address>=buffer_start_addr then
@@ -238,40 +235,6 @@ begin
         mcs_init(INIT_FILE_PATH, mcs_list, VERBOSE);
         buffer_start_addr   := x"000000";
         fill_buffer(buf);
-        
-        read_flash(buf, x"0C0000", flash_data_byte);
-        report "read " & hstr(flash_data_byte);
-        ll_report(write_cache);
-        
-        write_flash(buf, x"0C0000", x"CC");
-        ll_report(write_cache);
-        report "written 0xCC";
-        
-        write_flash(buf, x"0C0000", x"DD");
-        ll_report(write_cache);
-        report "written 0xDD";
-        
-        mcs_write(write_cache, x"000C0000", x"112233", VERBOSE);
-        ll_report(write_cache);
-        report "written 0x112233";
-        
-        read_flash(buf, x"0C0001", flash_data_byte);
-        report "read " & hstr(flash_data_byte);
-        ll_report(write_cache);
-        
-        write_flash(buf, x"0C0001", x"44");
-        ll_report(write_cache);
-        report "written 0x44";
-        
-        read_flash(buf, x"0C0001", flash_data_byte);
-        report "read " & hstr(flash_data_byte);
-        ll_report(write_cache);
-        
-        write_flash(buf, x"0C0005", x"44");
-        ll_report(write_cache);
-        report "written 0x445566";
-        
-        assert false severity FAILURE;
 
         flash_status    := x"00";
         main_loop : loop
