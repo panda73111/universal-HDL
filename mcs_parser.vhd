@@ -464,7 +464,7 @@ package body mcs_parser is
                         
                         addr_offs           := int(address-list_address);
                         data_byte_count     := data'length/8;
-                        slice_byte_count    := minimum(data_byte_count, addr_offs+WRITE_RECORD_SIZE);
+                        slice_byte_count    := minimum(data_byte_count, WRITE_RECORD_SIZE-addr_offs);
                         
                         modify_mcs_data_line(p.data,
                             desc_data(desc_data'high downto desc_data'high-slice_byte_count*8+1),
