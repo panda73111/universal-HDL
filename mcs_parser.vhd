@@ -20,6 +20,7 @@ package mcs_parser is
     shared variable checksum    : std_ulogic_vector(7 downto 0) := x"00";
 
     procedure mcs_init;
+    
     procedure mcs_init(
         filename    : in string;
         list        : inout ll_item_pointer_type;

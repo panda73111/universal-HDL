@@ -63,7 +63,7 @@ architecture rtl of UART_SENDER is
     
     type reg_type is record
         state       : state_type;
-        tick_cnt    : natural range 0 to cycle_ticks-1;
+        tick_cnt    : natural range 0 to cycle_ticks;
         sending     : boolean;
         bit_index   : unsigned(2 downto 0);
         txd         : std_ulogic;

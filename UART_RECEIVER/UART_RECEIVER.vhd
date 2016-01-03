@@ -60,7 +60,7 @@ architecture rtl of UART_RECEIVER is
     
     type reg_type is record
         state       : state_type;
-        tick_cnt    : natural range 0 to cycle_ticks-1;
+        tick_cnt    : natural range 0 to cycle_ticks;
         receiving   : boolean;
         bit_index   : unsigned(2 downto 0);
         dout        : std_ulogic_vector(DATA_BITS-1 downto 0);
