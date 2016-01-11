@@ -39,6 +39,8 @@ end test_spi_flash;
 
 architecture behavioral of test_spi_flash is
 
+    constant VERBOSE_MCS_PARSER : boolean := VERBOSE;
+    
     type buffer_type is
         array(0 to BUFFER_SIZE-1) of
         std_ulogic_vector(7 downto 0);
@@ -74,7 +76,7 @@ architecture behavioral of test_spi_flash is
         buf := (others => x"00");
 
         mcs_init;
-        mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE);
+        mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE_MCS_PARSER);
 
         read_loop : while mcs_valid loop
 
@@ -89,7 +91,7 @@ architecture behavioral of test_spi_flash is
                 buf(int(mcs_address-buffer_start_addr)) := mcs_data;
             end if;
 
-            mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE);
+            mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE_MCS_PARSER);
 
         end loop;
 
@@ -110,7 +112,7 @@ architecture behavioral of test_spi_flash is
         mcs_init;
         
         while valid and read_addr/=x"00" & addr loop
-            mcs_read_byte(write_cache, read_addr, temp, valid, VERBOSE);
+            mcs_read_byte(write_cache, read_addr, temp, valid, VERBOSE_MCS_PARSER);
         end loop;
         
         if not valid then
@@ -130,7 +132,7 @@ architecture behavioral of test_spi_flash is
         data    := temp;
 
         assert not VERBOSE
-            report "Reading byte: 0x" & hstr(temp) & " at 0x" & hstr(addr, false)
+            report "Reading byte: 0x" & hstr(temp) & " at 0x" & hstr(addr)
             severity NOTE;
     end procedure;
 
@@ -142,12 +144,12 @@ architecture behavioral of test_spi_flash is
         variable write_addr : std_ulogic_vector(31 downto 0);
     begin
         assert not VERBOSE
-            report "Writing byte: 0x" & hstr(data) & " at 0x" & hstr(addr, VERBOSE)
+            report "Writing byte: 0x" & hstr(data) & " at 0x" & hstr(addr)
             severity NOTE;
         
         write_addr  := x"00" & addr;
         
-        mcs_write(write_cache, write_addr, data, VERBOSE);
+        mcs_write(write_cache, write_addr, data, VERBOSE_MCS_PARSER);
     end procedure;
 
 begin
