@@ -48,6 +48,10 @@ package body mcs_parser is
 
     procedure mcs_init is
     begin
+        if item/=null then
+            deallocate(item);
+        end if;
+        
         addr_offset := x"00000000";
         bytes_left  := 0;
         item        := null;
