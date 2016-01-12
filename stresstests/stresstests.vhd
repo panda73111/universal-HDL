@@ -30,7 +30,7 @@ begin
             valid   := true;
             while valid loop
                 mcs_read_byte(list, address, data, valid, false);
-                --report "address: " & hstr(address) & " data: " & hstr(data);
+                report "address: " & hstr(address) & " data: " & hstr(data);
             end loop;
             
         end loop;
