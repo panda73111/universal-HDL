@@ -119,6 +119,7 @@ package body mcs_parser is
         end if;
         
         address := addr_offset;
+        data    := x"00";
         
         if list=null then
             assert not verbose
@@ -387,6 +388,8 @@ package body mcs_parser is
             data_after  := new string'(mcs_line.all(
                 10+(addr_offs+data_byte_count)*2 to 10+mcs_line_byte_count*2-1));
         end if;
+        
+        -- TODO: zero padding between data_before and data
         
         mcs_line    := null;
         write(mcs_line, COLON);
