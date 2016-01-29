@@ -34,7 +34,7 @@ entity ASYNC_FIFO is
         EMPTY   : out std_ulogic := '0';
         WR_ACK  : out std_ulogic := '0'; -- write was successful
         VALID   : out std_ulogic := '0'; -- read was successful
-        COUNT   : out std_ulogic_vector(log2(DEPTH)-1 downto 0) := (others => '0')
+        COUNT   : out std_ulogic_vector(log2(DEPTH) downto 0) := (others => '0')
     ); 
 end ASYNC_FIFO;
 
