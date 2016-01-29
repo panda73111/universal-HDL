@@ -39,15 +39,7 @@ entity ASYNC_FIFO is
 end ASYNC_FIFO;
 
 architecture rtl of ASYNC_FIFO is
-    signal counter  : unsigned(COUNT'range) := (others => '0');
-    
-    signal fifo_empty, fifo_full    : std_ulogic := '0';
 begin
-    
-    COUNT   <= stdulv(counter);
-    
-    FULL    <= fifo_full;
-    EMPTY   <= fifo_empty;
     
     ASYNC_FIFO_2CLK_inst : entity work.ASYNC_FIFO_2CLK
         generic map (
@@ -64,24 +56,12 @@ begin
             WR_EN   => WR_EN,
             
             DOUT    => DOUT,
-            FULL    => fifo_full,
-            EMPTY   => fifo_empty,
+            FULL    => FULL,
+            EMPTY   => EMPTY,
             WR_ACK  => WR_ACK,
-            VALID   => VALID
+            VALID   => VALID,
+            COUNT   => COUNT
         );
-    
-    count_proc : process(CLK, RST)
-    begin
-        if RST='1' then
-            counter <= (others => '0');
-        elsif rising_edge(CLK) then
-            if RD_EN='0' and WR_EN='1' and fifo_full='0' then
-                counter <= counter+1;
-            elsif RD_EN='1' and WR_EN='0' and fifo_empty='0' then
-                counter <= counter-1;
-            end if;
-        end if;
-    end process;
     
 end rtl;
 

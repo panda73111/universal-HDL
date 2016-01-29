@@ -39,6 +39,7 @@ architecture behavior of ASYNC_FIFO_2CLK_tb is
     signal FULL     : std_ulogic;
     signal EMPTY    : std_ulogic;
     signal DOUT     : std_ulogic_vector(7 downto 0);
+    signal COUNT    : std_ulogic_vector(log2(DEPTH) downto 0);
     
     -- clock period definitions
     constant RD_CLK_PERIOD  : time := 20 ns; -- 50 MHz
@@ -75,7 +76,8 @@ begin
             WR_ACK  => WR_ACK,
             FULL    => FULL,
             EMPTY   => EMPTY,
-            DOUT    => DOUT
+            DOUT    => DOUT,
+            COUNT   => COUNT
         );
     
     RD_CLK  <= not RD_CLK after RD_CLK_PERIOD/2;
@@ -93,23 +95,18 @@ begin
         start_read  <= true;
         start_write <= true;
         
-        wait until read_stage=1 and write_stage=1;
-        
         -- stage 1: fill the FIFO
-        
-        wait until read_stage=2 and write_stage=2;
-        
         -- stage 2: empty the FIFO
-        
-        wait until read_stage=3 and write_stage=3;
-        
         -- stage 3: single write
+        -- stage 4: single read
+        -- stage 5: fill half the capacity
+        -- stage 6: empty the fifo
+        -- stage 7: fill the fifo
+        -- stage 8: empty the fifo
         
-        wait until read_stage=4 and write_stage=4;
-        
-        -- stage 3: single read
-        
-        wait until read_stage=5 and write_stage=5;
+        for next_stage in 1 to 9 loop
+            wait until read_stage=next_stage and write_stage=next_stage;
+        end loop;
         
         wait for 1 us;
         report "NONE. All tests completed."
@@ -169,6 +166,48 @@ begin
                         read_stage  <= 5;
                     end if;
                 
+                when 5 =>
+                    if write_stage=6 then
+                        read_stage  <= 6;
+                    end if;
+                
+                when 6 =>
+                    read_counter    <= read_counter+1;
+                    case read_counter is
+                        when 0 =>
+                            RD_EN   <= '1';
+                        when 16 =>
+                            RD_EN   <= '0';
+                        when others =>
+                            assert read_counter<100
+                                report "Read timeout!"
+                                severity FAILURE;
+                    end case;
+                    if EMPTY='1' then
+                        read_stage  <= 7;
+                    end if;
+                
+                when 7 =>
+                    if write_stage=8 then
+                        read_stage  <= 8;
+                    end if;
+                
+                when 8 =>
+                    read_counter    <= read_counter+1;
+                    case read_counter is
+                        when 0 =>
+                            RD_EN   <= '1';
+                        when 32 =>
+                            RD_EN   <= '0';
+                        when others =>
+                            assert read_counter<100
+                                report "Read timeout!"
+                                severity FAILURE;
+                    end case;
+                    if EMPTY='1' then
+                        read_stage  <= 9;
+                    end if;
+                
                 when others =>
                     null;
                 
@@ -226,6 +265,39 @@ begin
                 when 4 =>
                     if read_stage=5 then
                         write_stage <= 5;
+                    end if;
+                
+                when 5 =>
+                    write_counter   <= write_counter+1;
+                    WR_EN           <= '0';
+                    if write_counter<16 then
+                        WR_EN       <= '1';
+                        DIN         <= stdulv(din_counter);
+                        din_counter <= din_counter+1;
+                    else
+                        write_stage     <= 6;
+                    end if;
+                
+                when 6 =>
+                    if read_stage=7 then
+                        write_stage <= 7;
+                    end if;
+                
+                when 7 =>
+                    write_counter   <= write_counter+1;
+                    WR_EN           <= '0';
+                    if write_counter<32 then
+                        WR_EN       <= '1';
+                        DIN         <= stdulv(din_counter);
+                        din_counter <= din_counter+1;
+                    end if;
+                    if FULL='1' then
+                        write_stage <= 8;
+                    end if;
+                
+                when 8 =>
+                    if read_stage=9 then
+                        write_stage <= 9;
                     end if;
                 
                 when others =>

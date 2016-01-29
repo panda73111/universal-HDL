@@ -34,7 +34,8 @@ entity ASYNC_FIFO_2CLK is
         FULL    : out std_ulogic := '0';
         EMPTY   : out std_ulogic := '0';
         WR_ACK  : out std_ulogic := '0'; -- write was successful
-        VALID   : out std_ulogic := '0'  -- read was successful
+        VALID   : out std_ulogic := '0'; -- read was successful
+        COUNT   : out std_ulogic_vector(log2(DEPTH) downto 0) := (others => '0')
     ); 
 end ASYNC_FIFO_2CLK;
 
@@ -66,6 +67,8 @@ architecture rtl of ASYNC_FIFO_2CLK is
     signal rd_p_inc : std_ulogic := '0';
     signal wr_p_inc : std_ulogic := '0';
     
+    signal cnt_next, cnt    : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
+    
 begin
     
     FULL    <= is_full;
@@ -79,6 +82,8 @@ begin
     
     rd_p_bin_next   <= rd_p_bin + (rd_p_inc and not is_empty);
     wr_p_bin_next   <= wr_p_bin + (wr_p_inc and not is_full);
+    
+    cnt_next    <= wr_p_bin_next - rd_p_bin_next;
     
     -- gray code conversion
     rd_p_next   <=  rd_p_bin_next(ADDR_BITS) &
@@ -98,6 +103,9 @@ begin
     
     wr_p_rd_sync_BUS_SYNC_inst : entity work.BUS_SYNC
         generic map (ADDR_BITS+1) port map (RD_CLK, wr_p, wr_p_rd_sync);
+    
+    cnt_sync_BUS_SYNC_inst : entity work.BUS_SYNC
+        generic map (ADDR_BITS+1) port map (RD_CLK, cnt, COUNT);
     
     push_proc : process (RST, WR_CLK)
     begin
@@ -132,6 +140,7 @@ begin
             rd_p        <= rd_p_next;
             rd_p_bin    <= rd_p_bin_next;
             is_empty    <= is_empty_next;
+            cnt         <= cnt_next;
         end if;
     end process;
     
