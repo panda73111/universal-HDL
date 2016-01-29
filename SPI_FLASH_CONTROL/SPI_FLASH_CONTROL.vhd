@@ -23,7 +23,8 @@ entity SPI_FLASH_CONTROL is
         CLK_OUT_MULT        : natural range 2 to 256;
         CLK_OUT_DIV         : natural range 1 to 256;
         STATUS_POLL_INTERV  : natural := 50_000; -- 1 ms at 50 MHz
-        BUF_SIZE            : natural := 1024
+        BUF_SIZE            : natural := 1024;
+        BUF_AFULL_COUNT     : natural := 786
     );
     port (
         CLK : in std_ulogic;
@@ -40,6 +41,7 @@ entity SPI_FLASH_CONTROL is
         WR_ACK  : out std_ulogic := '0';
         BUSY    : out std_ulogic := '0';
         FULL    : out std_ulogic := '0';
+        AFULL   : out std_ulogic := '0';
         MOSI    : out std_ulogic := '0';
         C       : out std_ulogic := '1';
         SN      : out std_ulogic := '1'
@@ -136,6 +138,7 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal fifo_dout    : std_ulogic_vector(7 downto 0) := x"00";
     signal fifo_empty   : std_ulogic := '0';
     signal fifo_full    : std_ulogic := '0';
+    signal fifo_count   : std_ulogic_vector(log2(BUF_SIZE) downto 0) := (others => '0');
     
     signal next_data_byte       : std_ulogic_vector(7 downto 0) := x"00";
     signal more_bytes_to_send   : std_ulogic := '0';
@@ -148,6 +151,7 @@ begin
     oddr2_rst   <= sn_sync;
     
     FULL    <= fifo_full;
+    AFULL   <= '1' when fifo_count >= BUF_AFULL_COUNT else '0';
     
     fifo_din    <= DIN;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
@@ -209,7 +213,8 @@ begin
             
             DOUT    => fifo_dout,
             FULL    => fifo_full,
-            EMPTY   => fifo_empty
+            EMPTY   => fifo_empty,
+            COUNT   => fifo_count
         );
     
     byte_buffer_proc : process(clk_out)
