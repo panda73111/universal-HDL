@@ -132,6 +132,7 @@ begin
             rd_p        <= (others => '0');
             rd_p_bin    <= (others => '0');
             is_empty    <= '1';
+            cnt         <= (others => '0');
         elsif rising_edge(RD_CLK) then
             VALID       <= rd_p_inc;
             if rd_p_inc='1' then
