@@ -104,7 +104,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         data_bit_index  : unsigned(2 downto 0);
         addr_bit_index  : unsigned(5 downto 0);
         data            : std_ulogic_vector(7 downto 0);
-        tick_count      : natural range 0 to STATUS_POLL_INTERV;
+        tick_count      : unsigned(log2(STATUS_POLL_INTERV) downto 0);
         fifo_rd_en      : std_ulogic;
     end record;
     
@@ -117,7 +117,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         data_bit_index  => uns(7, 3),
         addr_bit_index  => uns(23, 6),
         data            => x"00",
-        tick_count      => 0,
+        tick_count      => uns(STATUS_POLL_INTERV-2, reg_type.tick_count'length),
         fifo_rd_en      => '0'
     );
     
@@ -321,13 +321,13 @@ begin
                 r.state := WAIT_FOR_SECTOR_ERASE;
             
             when WAIT_FOR_SECTOR_ERASE =>
-                r.tick_count    := cr.tick_count+1;
-                if cr.tick_count=STATUS_POLL_INTERV-1 then
+                r.tick_count    := cr.tick_count-1;
+                if cr.tick_count(reg_type.tick_count'high)='1' then
                     r.state := ERASE_SEND_READ_STATUS_REGISTER_COMMAND;
                 end if;
             
             when ERASE_SEND_READ_STATUS_REGISTER_COMMAND =>
-                r.tick_count        := 0;
+                r.tick_count        := uns(STATUS_POLL_INTERV-2, reg_type.tick_count'length);
                 r.sn                := '0';
                 r.mosi              := CMD_READ_STATUS_REGISTER(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
@@ -405,13 +405,13 @@ begin
                 r.state := WAIT_FOR_PROGRAM;
             
             when WAIT_FOR_PROGRAM =>
-                r.tick_count    := cr.tick_count+1;
-                if cr.tick_count=STATUS_POLL_INTERV-1 then
+                r.tick_count    := cr.tick_count-1;
+                if cr.tick_count(reg_type.tick_count'high)='1' then
                     r.state := PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND;
                 end if;
             
             when PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND =>
-                r.tick_count        := 0;
+                r.tick_count        := uns(STATUS_POLL_INTERV-2, reg_type.tick_count'length);
                 r.sn                := '0';
                 r.mosi              := CMD_READ_STATUS_REGISTER(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
