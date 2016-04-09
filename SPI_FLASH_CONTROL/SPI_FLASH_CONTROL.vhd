@@ -20,11 +20,12 @@ use work.help_funcs.all;
 entity SPI_FLASH_CONTROL is
     generic (
         CLK_IN_PERIOD       : real;
-        CLK_OUT_MULT        : natural range 2 to 256;
-        CLK_OUT_DIV         : natural range 1 to 256;
-        STATUS_POLL_INTERV  : natural := 50_000; -- 1 ms at 50 MHz
-        BUF_SIZE            : natural := 1024;
-        BUF_AFULL_COUNT     : natural := 786
+        CLK_OUT_MULT        : positive range 2 to 256;
+        CLK_OUT_DIV         : positive range 1 to 256;
+        STATUS_POLL_INTERV  : positive := 50_000; -- 1 ms at 50 MHz
+        BUF_SIZE            : positive := 1024;
+        BUF_AFULL_COUNT     : positive := 786;
+        SECTOR_SIZE         : positive := 2**16 -- 64 KB
     );
     port (
         CLK : in std_ulogic;
@@ -57,6 +58,8 @@ architecture rtl of SPI_FLASH_CONTROL is
     constant CMD_READ_DATA_BYTES        : cmd_type := x"03";
     constant CMD_PAGE_PROGRAM           : cmd_type := x"02";
     constant CMD_READ_STATUS_REGISTER   : cmd_type := x"05";
+    
+    constant SECTOR_MASK    : std_ulogic_vector(23 downto 0) := stdulv(SECTOR_SIZE-1, 24);
     
     type state_type is (
         WAIT_FOR_INPUT,
@@ -92,7 +95,8 @@ architecture rtl of SPI_FLASH_CONTROL is
         PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND,
         PROGRAM_WAIT_FOR_DATA,
         PROGRAM_READ_STATUS_REGISTER,
-        PROGRAM_CHECK_WIP_BIT
+        PROGRAM_CHECK_WIP_BIT,
+        PROGRAM_NEXT_SECTOR
     );
     
     type reg_type is record
@@ -106,6 +110,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         data            : std_ulogic_vector(7 downto 0);
         tick_count      : unsigned(log2(STATUS_POLL_INTERV) downto 0);
         fifo_rd_en      : std_ulogic;
+        cur_addr        : std_ulogic_vector(23 downto 0);
     end record;
     
     constant reg_type_def   : reg_type := (
@@ -117,8 +122,9 @@ architecture rtl of SPI_FLASH_CONTROL is
         data_bit_index  => uns(7, 3),
         addr_bit_index  => uns(23, 6),
         data            => x"00",
-        tick_count      => uns(STATUS_POLL_INTERV-2, reg_type.tick_count'length),
-        fifo_rd_en      => '0'
+        tick_count      => uns(STATUS_POLL_INTERV-2, log2(STATUS_POLL_INTERV)+1),
+        fifo_rd_en      => '0',
+        cur_addr        => (others => '0')
     );
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
@@ -143,6 +149,10 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal next_data_byte       : std_ulogic_vector(7 downto 0) := x"00";
     signal more_bytes_to_send   : std_ulogic := '0';
     
+    signal cur_addr_sector      : std_ulogic_vector(23 downto 0) := x"000000";
+    signal next_addr_sector     : std_ulogic_vector(23 downto 0) := x"000000";
+    signal sector_transition    : boolean := false;
+    
 begin
     
     SN      <= sn_sync;
@@ -156,6 +166,13 @@ begin
     fifo_din    <= DIN;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
     fifo_wr_en  <= WR_EN;
+    
+    cur_addr_sector     <= cur_reg.cur_addr and not SECTOR_MASK;
+    next_addr_sector    <= cur_reg.cur_addr+1 and not SECTOR_MASK;
+    
+    sector_transition   <=
+        cur_addr_sector(log2(SECTOR_SIZE))='0' and
+        next_addr_sector(log2(SECTOR_SIZE))='1';
     
     c_ODDR2_inst : ODDR2
         generic map (
@@ -230,7 +247,9 @@ begin
         end if;
     end process;
     
-    stm_proc : process(RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte, more_bytes_to_send)
+    stm_proc : process(
+        RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte,
+        more_bytes_to_send, sector_transition, cur_addr_sector)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -246,6 +265,7 @@ begin
                 r.sn                := '1';
                 r.addr_bit_index    := uns(23, 6);
                 r.data_bit_index    := uns(7, 3);
+                r.cur_addr          := ADDR;
                 if rd_en_sync='1' then
                     r.state := SEND_READ_COMMAND;
                 end if;
@@ -264,7 +284,7 @@ begin
                 end if;
             
             when SEND_READ_ADDR =>
-                r.mosi              := ADDR(int(cr.addr_bit_index));
+                r.mosi              := cr.cur_addr(int(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=0 then
                     r.state := WAIT_FOR_DATA_1;
@@ -310,7 +330,7 @@ begin
                 end if;
             
             when SEND_ERASE_ADDRESS =>
-                r.mosi              := ADDR(int(cr.addr_bit_index));
+                r.mosi              := cur_addr_sector(int(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=0 then
                     r.state := END_SECTOR_ERASE_COMMAND;
@@ -322,12 +342,12 @@ begin
             
             when WAIT_FOR_SECTOR_ERASE =>
                 r.tick_count    := cr.tick_count-1;
-                if cr.tick_count(reg_type.tick_count'high)='1' then
+                if cr.tick_count(cr.tick_count'high)='1' then
                     r.state := ERASE_SEND_READ_STATUS_REGISTER_COMMAND;
                 end if;
             
             when ERASE_SEND_READ_STATUS_REGISTER_COMMAND =>
-                r.tick_count        := uns(STATUS_POLL_INTERV-2, reg_type.tick_count'length);
+                r.tick_count        := uns(STATUS_POLL_INTERV-2, cr.tick_count'length);
                 r.sn                := '0';
                 r.mosi              := CMD_READ_STATUS_REGISTER(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
@@ -380,7 +400,7 @@ begin
                 end if;
             
             when SEND_PROGRAM_ADDR =>
-                r.mosi              := ADDR(int(cr.addr_bit_index));
+                r.mosi              := cr.cur_addr(int(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=1 then
                     r.fifo_rd_en    := '1';
@@ -395,7 +415,8 @@ begin
                     r.fifo_rd_en    := '1';
                 elsif cr.data_bit_index=0 then
                     r.wr_ack    := '1';
-                    if more_bytes_to_send='0' then
+                    r.cur_addr  := cr.cur_addr+1;
+                    if more_bytes_to_send='0' or sector_transition then
                         r.state := END_PROGRAM_COMMAND;
                     end if;
                 end if;
@@ -406,12 +427,12 @@ begin
             
             when WAIT_FOR_PROGRAM =>
                 r.tick_count    := cr.tick_count-1;
-                if cr.tick_count(reg_type.tick_count'high)='1' then
+                if cr.tick_count(cr.tick_count'high)='1' then
                     r.state := PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND;
                 end if;
             
             when PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND =>
-                r.tick_count        := uns(STATUS_POLL_INTERV-2, reg_type.tick_count'length);
+                r.tick_count        := uns(STATUS_POLL_INTERV-2, cr.tick_count'length);
                 r.sn                := '0';
                 r.mosi              := CMD_READ_STATUS_REGISTER(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
@@ -434,7 +455,16 @@ begin
                 r.state := WAIT_FOR_PROGRAM;
                 if MISO='0' then
                     r.state := WAIT_FOR_INPUT;
+                    if more_bytes_to_send='1' then
+                        -- keep programming the next sector
+                        r.state := PROGRAM_NEXT_SECTOR;
+                    end if;
                 end if;
+            
+            when PROGRAM_NEXT_SECTOR =>
+                r.addr_bit_index    := uns(23, 6);
+                r.data_bit_index    := uns(7, 3);
+                r.state             := ERASE_SEND_WRITE_ENABLE_COMMAND;
             
         end case;
         
