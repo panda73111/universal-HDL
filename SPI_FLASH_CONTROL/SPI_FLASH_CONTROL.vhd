@@ -150,7 +150,7 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal more_bytes_to_send   : std_ulogic := '0';
     
     signal cur_addr_sector      : std_ulogic_vector(23 downto 0) := x"000000";
-    signal next_addr_sector     : std_ulogic_vector(23 downto 0) := x"000000";
+    signal next_addr            : std_ulogic_vector(23 downto 0) := x"000000";
     signal sector_transition    : boolean := false;
     
 begin
@@ -167,12 +167,12 @@ begin
     fifo_rd_en  <= cur_reg.fifo_rd_en;
     fifo_wr_en  <= WR_EN;
     
-    cur_addr_sector     <= cur_reg.cur_addr and not SECTOR_MASK;
-    next_addr_sector    <= cur_reg.cur_addr+1 and not SECTOR_MASK;
+    cur_addr_sector <= cur_reg.cur_addr and not SECTOR_MASK;
+    next_addr       <= cur_reg.cur_addr+1 and not SECTOR_MASK;
     
     sector_transition   <=
-        cur_addr_sector(log2(SECTOR_SIZE))='0' and
-        next_addr_sector(log2(SECTOR_SIZE))='1';
+        cur_addr_sector(log2(SECTOR_SIZE)) /=
+        next_addr(log2(SECTOR_SIZE));
     
     c_ODDR2_inst : ODDR2
         generic map (
@@ -412,7 +412,9 @@ begin
                 r.mosi              := next_data_byte(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=1 then
-                    r.fifo_rd_en    := '1';
+                    if not sector_transition then
+                        r.fifo_rd_en    := '1';
+                    end if;
                 elsif cr.data_bit_index=0 then
                     r.wr_ack    := '1';
                     r.cur_addr  := cr.cur_addr+1;
