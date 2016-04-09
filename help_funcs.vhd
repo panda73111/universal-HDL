@@ -113,7 +113,8 @@ package body help_funcs is
     function "+"(l : std_ulogic_vector; r : std_ulogic) return std_ulogic_vector is
         variable t  : std_ulogic_vector(l'range);
     begin
-        t   := (l'low => r, others => '0');
+        t           := (others => '0');
+        t(l'low)    := r;
         return l + t;
     end function;
     
@@ -125,7 +126,8 @@ package body help_funcs is
     function "+"(u : unsigned; v : std_ulogic) return unsigned is
         variable t  : std_ulogic_vector(u'range);
     begin
-        t   := (u'low => v, others => '0');
+        t           := (others => '0');
+        t(u'low)    := v;
         return u + uns(t);
     end function;
     
@@ -137,7 +139,8 @@ package body help_funcs is
     function "+"(l : signed; r : std_ulogic) return signed is
         variable t  : signed(l'range);
     begin
-        t   := (l'low => r, others => '0');
+        t           := (others => '0');
+        t(l'low)    := r;
         return l + t;
     end function;
     
@@ -159,7 +162,8 @@ package body help_funcs is
     function "-"(l : std_ulogic_vector; r : std_ulogic) return std_ulogic_vector is
         variable t  : std_ulogic_vector(l'range);
     begin
-        t   := (l'low => r, others => '0');
+        t           := (others => '0');
+        t(l'low)    := r;
         return l - t;
     end function;
     
@@ -171,7 +175,8 @@ package body help_funcs is
     function "-"(u : unsigned; v : std_ulogic) return unsigned is
         variable t : std_ulogic_vector(u'range);
     begin
-        t   := (u'low => v, others => '0');
+        t           := (others => '0');
+        t(u'low)    := v;
         return u - uns(t);
     end function;
     
@@ -183,7 +188,8 @@ package body help_funcs is
     function "-"(l : signed; r : std_ulogic) return signed is
         variable t  : signed(l'range);
     begin
-        t   := (l'low => r, others => '0');
+        t           := (others => '0');
+        t(l'low)    := r;
         return l - t;
     end function;
     
