@@ -56,7 +56,8 @@ BEGIN
         generic map (
             CLK_IN_PERIOD   => clk_period_real,
             CLK_OUT_MULT    => 2,
-            CLK_OUT_DIV     => 5
+            CLK_OUT_DIV     => 5,
+            BUF_SIZE        => 2048
         )
         port map (
             CLK => clk,
@@ -371,6 +372,23 @@ BEGIN
                 severity FAILURE;
         end loop;
         rd_en   <= '0';
+        wait until rising_edge(clk);
+        
+        wait until falling_edge(busy);
+        wait for 10 us;
+        
+        -- write 2048 bytes (8 bit counter) at address 0x5FC00, across sector border at 0x60000
+        flash_addr  := x"05FC00";
+        report "---------------";
+        report "Starting test 5";
+        wait until rising_edge(clk);
+        addr    <= flash_addr;
+        wr_en   <= '1';
+        for i in 0 to 2048 loop
+            din <= stdulv(i mod 256, 8);
+            wait until rising_edge(clk);
+        end loop;
+        wr_en   <= '0';
         wait until rising_edge(clk);
         
         wait until falling_edge(busy);
