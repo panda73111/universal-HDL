@@ -8,7 +8,7 @@
 -- Description: 
 --
 -- Additional Comments: 
---
+--  Only powers of 2 are supported for PAGE_SIZE and SECTOR_SIZE
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -22,10 +22,11 @@ entity SPI_FLASH_CONTROL is
         CLK_IN_PERIOD       : real;
         CLK_OUT_MULT        : positive range 2 to 256;
         CLK_OUT_DIV         : positive range 1 to 256;
-        STATUS_POLL_INTERV  : positive := 50_000; -- 1 ms at 50 MHz
+        STATUS_POLL_INTERV  : positive := 5_000; -- 100 us at 50 MHz
         BUF_SIZE            : positive := 1024;
         BUF_AFULL_COUNT     : positive := 786;
-        SECTOR_SIZE         : positive := 2**16 -- 64 KB
+        PAGE_SIZE           : positive := 2**8; -- 256 Bytes
+        SECTOR_SIZE         : positive := 2**16 -- 64 KBytes
     );
     port (
         CLK : in std_ulogic;
@@ -96,6 +97,8 @@ architecture rtl of SPI_FLASH_CONTROL is
         PROGRAM_WAIT_FOR_DATA,
         PROGRAM_READ_STATUS_REGISTER,
         PROGRAM_CHECK_WIP_BIT,
+        PROGRAM_EVAL_NEXT_STATE,
+        PROGRAM_NEXT_PAGE,
         PROGRAM_NEXT_SECTOR
     );
     
@@ -151,6 +154,7 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     signal cur_addr_sector      : std_ulogic_vector(23 downto 0) := x"000000";
     signal next_addr            : std_ulogic_vector(23 downto 0) := x"000000";
+    signal page_transition      : boolean := false;
     signal sector_transition    : boolean := false;
     
 begin
@@ -168,10 +172,14 @@ begin
     fifo_wr_en  <= WR_EN;
     
     cur_addr_sector <= cur_reg.cur_addr and not SECTOR_MASK;
-    next_addr       <= cur_reg.cur_addr+1 and not SECTOR_MASK;
+    next_addr       <= cur_reg.cur_addr+1;
+    
+    page_transition <=
+        cur_reg.cur_addr(log2(PAGE_SIZE)) /=
+        next_addr(log2(PAGE_SIZE));
     
     sector_transition   <=
-        cur_addr_sector(log2(SECTOR_SIZE)) /=
+        cur_reg.cur_addr(log2(SECTOR_SIZE)) /=
         next_addr(log2(SECTOR_SIZE));
     
     c_ODDR2_inst : ODDR2
@@ -248,8 +256,8 @@ begin
     end process;
     
     stm_proc : process(
-        RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte,
-        more_bytes_to_send, sector_transition, cur_addr_sector)
+            RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte,
+            more_bytes_to_send, page_transition, sector_transition, cur_addr_sector)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -418,7 +426,11 @@ begin
                 elsif cr.data_bit_index=0 then
                     r.wr_ack    := '1';
                     r.cur_addr  := cr.cur_addr+1;
-                    if more_bytes_to_send='0' or sector_transition then
+                    if
+                        more_bytes_to_send='0' or
+                        page_transition or
+                        sector_transition
+                    then
                         r.state := END_PROGRAM_COMMAND;
                     end if;
                 end if;
@@ -456,12 +468,22 @@ begin
                 -- WIP (write in progress) bit
                 r.state := WAIT_FOR_PROGRAM;
                 if MISO='0' then
-                    r.state := WAIT_FOR_INPUT;
-                    if more_bytes_to_send='1' then
-                        -- keep programming the next sector
+                    r.state := PROGRAM_EVAL_NEXT_STATE;
+                end if;
+            
+            when PROGRAM_EVAL_NEXT_STATE =>
+                r.state := WAIT_FOR_INPUT;
+                if more_bytes_to_send='1' then
+                    r.state := PROGRAM_NEXT_PAGE;
+                    if sector_transition then
                         r.state := PROGRAM_NEXT_SECTOR;
                     end if;
                 end if;
+            
+            when PROGRAM_NEXT_PAGE =>
+                r.addr_bit_index    := uns(23, 6);
+                r.data_bit_index    := uns(7, 3);
+                r.state             := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
             
             when PROGRAM_NEXT_SECTOR =>
                 r.addr_bit_index    := uns(23, 6);
