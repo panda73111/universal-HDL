@@ -87,7 +87,6 @@ architecture rtl of SPI_FLASH_CONTROL is
         -- Program
         PROGRAM_SEND_WRITE_ENABLE_COMMAND,
         PROGRAM_END_WRITE_ENABLE_COMMAND,
-        GET_FIRST_BYTE_TO_PROGRAM,
         SEND_PROGRAM_COMMAND,
         SEND_PROGRAM_ADDR,
         SEND_DATA,
@@ -278,7 +277,8 @@ begin
                     r.state := SEND_READ_COMMAND;
                 end if;
                 if fifo_empty='0' then
-                    r.state := ERASE_SEND_WRITE_ENABLE_COMMAND;
+                    r.fifo_rd_en    := '1';
+                    r.state         := ERASE_SEND_WRITE_ENABLE_COMMAND;
                 end if;
             
             -- Read
@@ -393,11 +393,7 @@ begin
             when PROGRAM_END_WRITE_ENABLE_COMMAND =>
                 r.sn                := '1';
                 r.addr_bit_index    := uns(23, 6);
-                r.state             := GET_FIRST_BYTE_TO_PROGRAM;
-            
-            when GET_FIRST_BYTE_TO_PROGRAM =>
-                r.fifo_rd_en    := '1';
-                r.state         := SEND_PROGRAM_COMMAND;
+                r.state             := SEND_PROGRAM_COMMAND;
             
             when SEND_PROGRAM_COMMAND =>
                 r.sn                := '0';
@@ -420,7 +416,10 @@ begin
                 r.mosi              := next_data_byte(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=1 then
-                    if not sector_transition then
+                    if
+                        not page_transition and
+                        not sector_transition
+                    then
                         r.fifo_rd_en    := '1';
                     end if;
                 elsif cr.data_bit_index=0 then
