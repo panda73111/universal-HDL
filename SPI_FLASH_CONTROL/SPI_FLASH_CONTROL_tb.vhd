@@ -81,6 +81,17 @@ BEGIN
     -- clock generation
     clk <= not clk after clk_period / 2;
     
+    sn_timing_check_proc : process
+        variable sn_rising_time : time;
+    begin
+        wait until rising_edge(sn);
+        sn_rising_time  := now;
+        wait until falling_edge(sn);
+        assert now-sn_rising_time>=100 ns
+            report "Violation of S# deselect time"
+            severity FAILURE;
+    end process;
+    
     spi_flash_sim_proc : process
         subtype cmd_type is std_ulogic_vector(7 downto 0);
         constant CMD_WRITE_ENABLE           : cmd_type := x"06";
