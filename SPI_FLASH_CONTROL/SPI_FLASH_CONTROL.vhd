@@ -163,8 +163,8 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal next_data_byte       : std_ulogic_vector(7 downto 0) := x"00";
     signal more_bytes_to_send   : std_ulogic := '0';
     
-    signal cur_addr_sector      : std_ulogic_vector(23 downto 0) := x"000000";
     signal next_addr            : std_ulogic_vector(23 downto 0) := x"000000";
+    
     signal page_transition      : boolean := false;
     signal sector_transition    : boolean := false;
     
@@ -185,7 +185,6 @@ begin
     fifo_rd_en  <= cur_reg.fifo_rd_en;
     fifo_wr_en  <= WR_EN;
     
-    cur_addr_sector <= cur_reg.cur_addr and not SECTOR_MASK;
     next_addr       <= cur_reg.cur_addr+1;
     
     page_transition <=
@@ -274,7 +273,7 @@ begin
     
     stm_proc : process(
             RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte,
-            more_bytes_to_send, page_transition, sector_transition, cur_addr_sector)
+            more_bytes_to_send, page_transition, sector_transition)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -370,7 +369,7 @@ begin
                 end if;
             
             when SEND_ERASE_ADDRESS =>
-                r.mosi              := cur_addr_sector(int(cr.addr_bit_index));
+                r.mosi              := cr.cur_addr(int(cr.addr_bit_index));
                 r.addr_bit_index    := cr.addr_bit_index-1;
                 if cr.addr_bit_index=0 then
                     r.state := END_SECTOR_ERASE_COMMAND;
