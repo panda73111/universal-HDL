@@ -65,8 +65,8 @@ architecture rtl of SPI_FLASH_CONTROL is
     constant SECTOR_MASK    : std_ulogic_vector(23 downto 0) := stdulv(SECTOR_SIZE-1, 24);
     
     constant CLK_OUT_PERIOD         : real := CLK_IN_PERIOD * real(CLK_OUT_DIV) / real(CLK_OUT_MULT);
-    constant STATUS_POLL_TICKS      : natural := int(ceil(STATUS_POLL_INTERVAL / CLK_OUT_PERIOD));
-    constant DESELECT_HOLD_TICKS    : natural := int(ceil(DESELECT_HOLD_TIME / CLK_OUT_PERIOD));
+    constant STATUS_POLL_TICKS      : natural := maximum(int(ceil(STATUS_POLL_INTERVAL / CLK_OUT_PERIOD)), 2);
+    constant DESELECT_HOLD_TICKS    : natural := maximum(int(ceil(DESELECT_HOLD_TIME / CLK_OUT_PERIOD)), 2);
     
     type state_type is (
         WAIT_FOR_INPUT,
