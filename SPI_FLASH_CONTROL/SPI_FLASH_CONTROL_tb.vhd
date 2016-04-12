@@ -349,7 +349,7 @@ BEGIN
                             if flash_status(1 downto 0)="10" then
                                 report "Writing byte: 0x" & hstr(flash_data_byte) & " at 0x" & hstr(flash_addr, false);
                                 flash_mem(int(flash_addr))  <= flash_data_byte;
-                                flash_addr(15 downto 0)     := flash_addr(15 downto 0)+1;
+                                flash_addr(7 downto 0)      := flash_addr(7 downto 0)+1;
                             end if;
                             wait until rising_edge(c) or sn='1';
                         end loop;
