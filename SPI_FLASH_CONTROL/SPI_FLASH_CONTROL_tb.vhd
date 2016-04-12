@@ -81,15 +81,84 @@ BEGIN
     -- clock generation
     clk <= not clk after clk_period / 2;
     
-    sn_timing_check_proc : process
+    sn_deselect_time_check_proc : process
         variable sn_rising_time : time;
     begin
-        wait until rising_edge(sn);
-        sn_rising_time  := now;
+        wait until rising_edge(sn); sn_rising_time  := now;
         wait until falling_edge(sn);
         assert now-sn_rising_time>=100 ns
             report "Violation of S# deselect time"
             severity FAILURE;
+    end process;
+    
+    sn_not_active_hold_timing_check_proc : process
+        variable c_rising_time  : time;
+    begin
+        wait until rising_edge(c); c_rising_time    := now;
+        wait until falling_edge(sn) or falling_edge(c);
+        if falling_edge(sn) then
+            assert now-c_rising_time>=10 ns
+                report "Violation of S# not active hold time"
+                severity FAILURE;
+        end if;
+    end process;
+    
+    sn_active_setup_time_check_proc : process
+        variable sn_falling_time    : time;
+    begin
+        wait until falling_edge(sn); sn_falling_time    := now;
+        wait until rising_edge(c) or rising_edge(sn);
+        if rising_edge(c) then
+            assert now-sn_falling_time>=10 ns
+                report "Violation of S# active setup time"
+                severity FAILURE;
+        end if;
+    end process;
+    
+    sn_active_hold_time_check_proc : process
+        variable c_rising_time  : time;
+    begin
+        wait until rising_edge(c); c_rising_time    := now;
+        wait until rising_edge(sn) or falling_edge(c);
+        if rising_edge(sn) then
+            assert now-c_rising_time>=10 ns
+                report "Violation of S# active hold time"
+                severity FAILURE;
+        end if;
+    end process;
+    
+    sn_not_active_setup_time_check_proc : process
+        variable sn_rising_time : time;
+    begin
+        wait until rising_edge(sn); sn_rising_time  := now;
+        wait until rising_edge(c) or falling_edge(sn);
+        if rising_edge(c) then
+            assert now-sn_rising_time>=10 ns
+                report "Violation of S# not active setup time"
+                severity FAILURE;
+        end if;
+    end process;
+    
+    data_in_setup_time_check_proc : process
+        variable mosi_change_time    : time;
+    begin
+        wait until mosi'event; mosi_change_time := now;
+        wait until rising_edge(c);
+        assert now-mosi_change_time>=5 ns
+            report "Violation of Data in setup time"
+            severity FAILURE;
+    end process;
+    
+    data_in_hold_time_check_proc : process
+        variable c_rising_time  : time;
+    begin
+        wait until rising_edge(c); c_rising_time    := now;
+        wait until mosi'event or falling_edge(c);
+        if mosi'event then
+            assert now-c_rising_time>=5 ns
+                report "Violation of Data in hold time"
+                severity FAILURE;
+        end if;
     end process;
     
     spi_flash_sim_proc : process
