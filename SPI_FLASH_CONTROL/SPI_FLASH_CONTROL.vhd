@@ -13,21 +13,22 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use IEEE.MATH_REAL.ALL;
 library UNISIM;
 use UNISIM.VComponents.all;
 use work.help_funcs.all;
 
 entity SPI_FLASH_CONTROL is
     generic (
-        CLK_IN_PERIOD       : real;
-        CLK_OUT_MULT        : positive range 2 to 256;
-        CLK_OUT_DIV         : positive range 1 to 256;
-        STATUS_POLL_TICKS  : real := 100_000.0; -- 100 us
-        DESELECT_HOLD_TIME  : real := 200.0;
-        BUF_SIZE            : positive := 1024;
-        BUF_AFULL_COUNT     : positive := 786;
-        PAGE_SIZE           : positive := 2**8; -- 256 Bytes
-        SECTOR_SIZE         : positive := 2**16 -- 64 KBytes
+        CLK_IN_PERIOD           : real;
+        CLK_OUT_MULT            : positive range 2 to 256;
+        CLK_OUT_DIV             : positive range 1 to 256;
+        STATUS_POLL_INTERVAL    : real := 100_000.0; -- 100 us
+        DESELECT_HOLD_TIME      : real := 200.0;
+        BUF_SIZE                : positive := 1024;
+        BUF_AFULL_COUNT         : positive := 786;
+        PAGE_SIZE               : positive := 2**8; -- 256 Bytes
+        SECTOR_SIZE             : positive := 2**16 -- 64 KBytes
     );
     port (
         CLK : in std_ulogic;
@@ -63,9 +64,9 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     constant SECTOR_MASK    : std_ulogic_vector(23 downto 0) := stdulv(SECTOR_SIZE-1, 24);
     
-    constant CLK_OUT_PERIOD         : real := CLK_IN_PERIOD * CLK_OUT_MULT / CLK_OUT_DIV;
-    constant STATUS_POLL_TICKS      : natural := STATUS_POLL_INTERV / CLK_OUT_PERIOD;
-    constant DESELECT_HOLD_TICKS    : natural := DESELECT_HOLD_TIME / CLK_OUT_PERIOD;
+    constant CLK_OUT_PERIOD         : real := CLK_IN_PERIOD * real(CLK_OUT_DIV) / real(CLK_OUT_MULT);
+    constant STATUS_POLL_TICKS      : natural := int(ceil(STATUS_POLL_INTERVAL / CLK_OUT_PERIOD));
+    constant DESELECT_HOLD_TICKS    : natural := int(ceil(DESELECT_HOLD_TIME / CLK_OUT_PERIOD));
     
     type state_type is (
         WAIT_FOR_INPUT,
