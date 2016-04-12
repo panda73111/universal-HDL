@@ -22,7 +22,7 @@ entity SPI_FLASH_CONTROL is
         CLK_IN_PERIOD       : real;
         CLK_OUT_MULT        : positive range 2 to 256;
         CLK_OUT_DIV         : positive range 1 to 256;
-        STATUS_POLL_INTERV  : positive := 5_000; -- 100 us at 50 MHz
+        STATUS_POLL_TICKS  : real := 100_000.0; -- 100 us
         DESELECT_HOLD_TIME  : real := 200.0;
         BUF_SIZE            : positive := 1024;
         BUF_AFULL_COUNT     : positive := 786;
@@ -64,6 +64,7 @@ architecture rtl of SPI_FLASH_CONTROL is
     constant SECTOR_MASK    : std_ulogic_vector(23 downto 0) := stdulv(SECTOR_SIZE-1, 24);
     
     constant CLK_OUT_PERIOD         : real := CLK_IN_PERIOD * CLK_OUT_MULT / CLK_OUT_DIV;
+    constant STATUS_POLL_TICKS      : natural := STATUS_POLL_INTERV / CLK_OUT_PERIOD;
     constant DESELECT_HOLD_TICKS    : natural := DESELECT_HOLD_TIME / CLK_OUT_PERIOD;
     
     type state_type is (
@@ -118,7 +119,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         data_bit_index      : unsigned(2 downto 0);
         addr_bit_index      : unsigned(5 downto 0);
         data                : std_ulogic_vector(7 downto 0);
-        poll_tick_count     : unsigned(log2(STATUS_POLL_INTERV) downto 0);
+        poll_tick_count     : unsigned(log2(STATUS_POLL_TICKS) downto 0);
         desel_tick_count    : unsigned(log2(DESELECT_HOLD_TICKS) downto 0);
         fifo_rd_en          : std_ulogic;
         cur_addr            : std_ulogic_vector(23 downto 0);
@@ -133,7 +134,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         data_bit_index      => uns(7, 3),
         addr_bit_index      => uns(23, 6),
         data                => x"00",
-        poll_tick_count     => uns(STATUS_POLL_INTERV-2, log2(STATUS_POLL_INTERV)+1),
+        poll_tick_count     => uns(STATUS_POLL_TICKS-2, log2(STATUS_POLL_TICKS)+1),
         desel_tick_count    => uns(DESELECT_HOLD_TICKS-2, log2(DESELECT_HOLD_TICKS)+1),
         fifo_rd_en          => '0',
         cur_addr            => (others => '0')
