@@ -23,6 +23,7 @@ entity SPI_FLASH_CONTROL is
         CLK_OUT_MULT        : positive range 2 to 256;
         CLK_OUT_DIV         : positive range 1 to 256;
         STATUS_POLL_INTERV  : positive := 5_000; -- 100 us at 50 MHz
+        DESELECT_HOLD_TIME  : real := 200.0;
         BUF_SIZE            : positive := 1024;
         BUF_AFULL_COUNT     : positive := 786;
         PAGE_SIZE           : positive := 2**8; -- 256 Bytes
@@ -62,8 +63,12 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     constant SECTOR_MASK    : std_ulogic_vector(23 downto 0) := stdulv(SECTOR_SIZE-1, 24);
     
+    constant CLK_OUT_PERIOD         : real := CLK_IN_PERIOD * CLK_OUT_MULT / CLK_OUT_DIV;
+    constant DESELECT_HOLD_TICKS    : natural := DESELECT_HOLD_TIME / CLK_OUT_PERIOD;
+    
     type state_type is (
         WAIT_FOR_INPUT,
+        POP_FIRST_BYTE,
         
         -- Read
         SEND_READ_COMMAND,
@@ -71,6 +76,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         WAIT_FOR_DATA_1,
         WAIT_FOR_DATA_2,
         READ_DATA,
+        READ_DESELECT,
         
         -- Erase
         ERASE_SEND_WRITE_ENABLE_COMMAND,
@@ -83,6 +89,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         ERASE_WAIT_FOR_DATA,
         ERASE_READ_STATUS_REGISTER,
         ERASE_CHECK_WIP_BIT,
+        ERASE_HOLD_DESELECT,
         
         -- Program
         PROGRAM_SEND_WRITE_ENABLE_COMMAND,
@@ -96,37 +103,40 @@ architecture rtl of SPI_FLASH_CONTROL is
         PROGRAM_WAIT_FOR_DATA,
         PROGRAM_READ_STATUS_REGISTER,
         PROGRAM_CHECK_WIP_BIT,
+        PROGRAM_HOLD_DESELECT,
         PROGRAM_EVAL_NEXT_STATE,
         PROGRAM_NEXT_PAGE,
         PROGRAM_NEXT_SECTOR
     );
     
     type reg_type is record
-        state           : state_type;
-        mosi            : std_ulogic;
-        sn              : std_ulogic;
-        valid           : std_ulogic;
-        wr_ack          : std_ulogic;
-        data_bit_index  : unsigned(2 downto 0);
-        addr_bit_index  : unsigned(5 downto 0);
-        data            : std_ulogic_vector(7 downto 0);
-        tick_count      : unsigned(log2(STATUS_POLL_INTERV) downto 0);
-        fifo_rd_en      : std_ulogic;
-        cur_addr        : std_ulogic_vector(23 downto 0);
+        state               : state_type;
+        mosi                : std_ulogic;
+        sn                  : std_ulogic;
+        valid               : std_ulogic;
+        wr_ack              : std_ulogic;
+        data_bit_index      : unsigned(2 downto 0);
+        addr_bit_index      : unsigned(5 downto 0);
+        data                : std_ulogic_vector(7 downto 0);
+        poll_tick_count     : unsigned(log2(STATUS_POLL_INTERV) downto 0);
+        desel_tick_count    : unsigned(log2(DESELECT_HOLD_TICKS) downto 0);
+        fifo_rd_en          : std_ulogic;
+        cur_addr            : std_ulogic_vector(23 downto 0);
     end record;
     
     constant reg_type_def   : reg_type := (
-        state           => WAIT_FOR_INPUT,
-        mosi            => '0',
-        sn              => '1',
-        valid           => '0',
-        wr_ack          => '0',
-        data_bit_index  => uns(7, 3),
-        addr_bit_index  => uns(23, 6),
-        data            => x"00",
-        tick_count      => uns(STATUS_POLL_INTERV-2, log2(STATUS_POLL_INTERV)+1),
-        fifo_rd_en      => '0',
-        cur_addr        => (others => '0')
+        state               => WAIT_FOR_INPUT,
+        mosi                => '0',
+        sn                  => '1',
+        valid               => '0',
+        wr_ack              => '0',
+        data_bit_index      => uns(7, 3),
+        addr_bit_index      => uns(23, 6),
+        data                => x"00",
+        poll_tick_count     => uns(STATUS_POLL_INTERV-2, log2(STATUS_POLL_INTERV)+1),
+        desel_tick_count    => uns(DESELECT_HOLD_TICKS-2, log2(DESELECT_HOLD_TICKS)+1),
+        fifo_rd_en          => '0',
+        cur_addr            => (others => '0')
     );
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
@@ -156,6 +166,9 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal page_transition      : boolean := false;
     signal sector_transition    : boolean := false;
     
+    signal time_to_poll     : boolean := false;
+    signal time_to_reselect : boolean := false;
+    
 begin
     
     SN      <= sn_sync;
@@ -180,6 +193,9 @@ begin
     sector_transition   <=
         cur_reg.cur_addr(log2(SECTOR_SIZE)) /=
         next_addr(log2(SECTOR_SIZE));
+    
+    time_to_poll        <= cur_reg.poll_tick_count(cur_reg.poll_tick_count'high)='1';
+    time_to_reselect    <= cur_reg.desel_tick_count(cur_reg.desel_tick_count'high)='1';
     
     c_ODDR2_inst : ODDR2
         generic map (
@@ -272,14 +288,18 @@ begin
                 r.sn                := '1';
                 r.addr_bit_index    := uns(23, 6);
                 r.data_bit_index    := uns(7, 3);
+                r.desel_tick_count  := reg_type_def.desel_tick_count;
                 r.cur_addr          := ADDR;
                 if rd_en_sync='1' then
                     r.state := SEND_READ_COMMAND;
                 end if;
                 if fifo_empty='0' then
-                    r.fifo_rd_en    := '1';
-                    r.state         := ERASE_SEND_WRITE_ENABLE_COMMAND;
+                    r.state := POP_FIRST_BYTE;
                 end if;
+            
+            when POP_FIRST_BYTE =>
+                r.fifo_rd_en    := '1';
+                r.state         := ERASE_SEND_WRITE_ENABLE_COMMAND;
             
             -- Read
             
@@ -312,6 +332,12 @@ begin
                 end if;
                 if rd_en_sync='0' then
                     r.sn    := '1';
+                    r.state := READ_DESELECT;
+                end if;
+            
+            when READ_DESELECT =>
+                r.desel_tick_count  := cr.desel_tick_count-1;
+                if time_to_reselect then
                     r.state := WAIT_FOR_INPUT;
                 end if;
             
@@ -326,13 +352,17 @@ begin
                 end if;
             
             when ERASE_END_WRITE_ENABLE_COMMAND =>
-                r.sn    := '1';
-                r.state := SEND_SECTOR_ERASE_COMMAND;
+                r.sn                := '1';
+                r.desel_tick_count  := cr.desel_tick_count-1;
+                if time_to_reselect then
+                    r.state := SEND_SECTOR_ERASE_COMMAND;
+                end if;
             
             when SEND_SECTOR_ERASE_COMMAND =>
                 r.sn                := '0';
                 r.mosi              := CMD_SECTOR_ERASE(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
+                r.desel_tick_count  := reg_type_def.desel_tick_count;
                 if cr.data_bit_index=0 then
                     r.state := SEND_ERASE_ADDRESS;
                 end if;
@@ -345,17 +375,21 @@ begin
                 end if;
             
             when END_SECTOR_ERASE_COMMAND =>
-                r.sn    := '1';
-                r.state := WAIT_FOR_SECTOR_ERASE;
+                r.sn                := '1';
+                r.desel_tick_count  := cr.desel_tick_count-1;
+                if time_to_reselect then
+                    r.state := WAIT_FOR_SECTOR_ERASE;
+                end if;
             
             when WAIT_FOR_SECTOR_ERASE =>
-                r.tick_count    := cr.tick_count-1;
-                if cr.tick_count(cr.tick_count'high)='1' then
+                r.poll_tick_count   := cr.poll_tick_count-1;
+                r.desel_tick_count  := reg_type_def.desel_tick_count;
+                if time_to_poll then
                     r.state := ERASE_SEND_READ_STATUS_REGISTER_COMMAND;
                 end if;
             
             when ERASE_SEND_READ_STATUS_REGISTER_COMMAND =>
-                r.tick_count        := uns(STATUS_POLL_INTERV-2, cr.tick_count'length);
+                r.poll_tick_count   := reg_type_def.poll_tick_count;
                 r.sn                := '0';
                 r.mosi              := CMD_READ_STATUS_REGISTER(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
@@ -377,6 +411,12 @@ begin
                 -- WIP = 'write in progress' bit
                 r.state := WAIT_FOR_SECTOR_ERASE;
                 if MISO='0' then
+                    r.state := ERASE_HOLD_DESELECT;
+                end if;
+            
+            when ERASE_HOLD_DESELECT =>
+                r.desel_tick_count  := cr.desel_tick_count-1;
+                if time_to_reselect then
                     r.state := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
                 end if;
             
@@ -386,6 +426,7 @@ begin
                 r.sn                := '0';
                 r.mosi              := CMD_WRITE_ENABLE(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
+                r.desel_tick_count  := reg_type_def.desel_tick_count;
                 if cr.data_bit_index=0 then
                     r.state := PROGRAM_END_WRITE_ENABLE_COMMAND;
                 end if;
@@ -393,12 +434,16 @@ begin
             when PROGRAM_END_WRITE_ENABLE_COMMAND =>
                 r.sn                := '1';
                 r.addr_bit_index    := uns(23, 6);
-                r.state             := SEND_PROGRAM_COMMAND;
+                r.desel_tick_count  := cr.desel_tick_count-1;
+                if time_to_reselect then
+                    r.state := SEND_PROGRAM_COMMAND;
+                end if;
             
             when SEND_PROGRAM_COMMAND =>
                 r.sn                := '0';
                 r.mosi              := CMD_PAGE_PROGRAM(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
+                r.desel_tick_count  := reg_type_def.desel_tick_count;
                 if cr.data_bit_index=0 then
                     r.state := SEND_PROGRAM_ADDR;
                 end if;
@@ -435,17 +480,21 @@ begin
                 end if;
             
             when END_PROGRAM_COMMAND =>
-                r.sn    := '1';
-                r.state := WAIT_FOR_PROGRAM;
+                r.sn                := '1';
+                r.desel_tick_count  := cr.desel_tick_count-1;
+                if time_to_reselect then
+                    r.state := WAIT_FOR_PROGRAM;
+                end if;
             
             when WAIT_FOR_PROGRAM =>
-                r.tick_count    := cr.tick_count-1;
-                if cr.tick_count(cr.tick_count'high)='1' then
+                r.poll_tick_count   := cr.poll_tick_count-1;
+                r.desel_tick_count  := reg_type_def.desel_tick_count;
+                if time_to_poll then
                     r.state := PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND;
                 end if;
             
             when PROGRAM_SEND_READ_STATUS_REGISTER_COMMAND =>
-                r.tick_count        := uns(STATUS_POLL_INTERV-2, cr.tick_count'length);
+                r.poll_tick_count   := reg_type_def.poll_tick_count;
                 r.sn                := '0';
                 r.mosi              := CMD_READ_STATUS_REGISTER(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
@@ -467,11 +516,18 @@ begin
                 -- WIP (write in progress) bit
                 r.state := WAIT_FOR_PROGRAM;
                 if MISO='0' then
+                    r.state := PROGRAM_HOLD_DESELECT;
+                end if;
+            
+            when PROGRAM_HOLD_DESELECT =>
+                r.desel_tick_count  := cr.desel_tick_count-1;
+                if time_to_reselect then
                     r.state := PROGRAM_EVAL_NEXT_STATE;
                 end if;
             
             when PROGRAM_EVAL_NEXT_STATE =>
-                r.state := WAIT_FOR_INPUT;
+                r.desel_tick_count  := reg_type_def.desel_tick_count;
+                r.state             := WAIT_FOR_INPUT;
                 if more_bytes_to_send='1' then
                     r.state := PROGRAM_NEXT_PAGE;
                     if sector_transition then
