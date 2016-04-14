@@ -272,8 +272,8 @@ begin
     end process;
     
     stm_proc : process(
-            RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte,
-            more_bytes_to_send, page_transition, sector_transition)
+            RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte, more_bytes_to_send,
+            page_transition, sector_transition, time_to_reselect, time_to_poll)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
