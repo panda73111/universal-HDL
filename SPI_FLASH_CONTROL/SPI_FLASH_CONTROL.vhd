@@ -25,8 +25,8 @@ entity SPI_FLASH_CONTROL is
         CLK_OUT_DIV             : positive range 1 to 256;
         STATUS_POLL_INTERVAL    : real := 100_000.0; -- 100 us
         DESELECT_HOLD_TIME      : real := 200.0;
-        BUF_SIZE                : positive := 1024;
-        BUF_AFULL_COUNT         : positive := 786;
+        BUFFER_SIZE             : positive := 1024;
+        BUFFER_AFULL_COUNT      : positive := 786;
         PAGE_SIZE               : positive := 2**8; -- 256 Bytes
         SECTOR_SIZE             : positive := 2**16 -- 64 KBytes
     );
@@ -158,7 +158,7 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal fifo_dout    : std_ulogic_vector(7 downto 0) := x"00";
     signal fifo_empty   : std_ulogic := '0';
     signal fifo_full    : std_ulogic := '0';
-    signal fifo_count   : std_ulogic_vector(log2(BUF_SIZE) downto 0) := (others => '0');
+    signal fifo_count   : std_ulogic_vector(log2(BUFFER_SIZE) downto 0) := (others => '0');
     
     signal next_data_byte       : std_ulogic_vector(7 downto 0) := x"00";
     signal more_bytes_to_send   : std_ulogic := '0';
@@ -179,7 +179,7 @@ begin
     oddr2_rst   <= sn_sync;
     
     FULL    <= fifo_full;
-    AFULL   <= '1' when fifo_count >= BUF_AFULL_COUNT else '0';
+    AFULL   <= '1' when fifo_count >= BUFFER_AFULL_COUNT else '0';
     
     fifo_din    <= DIN;
     fifo_rd_en  <= cur_reg.fifo_rd_en;
@@ -241,7 +241,7 @@ begin
     
     write_buffer_inst : entity work.ASYNC_FIFO_2CLK
         generic map (
-            DEPTH   => BUF_SIZE
+            DEPTH   => BUFFER_SIZE
         )
         port map (
             RD_CLK  => clk_out,
