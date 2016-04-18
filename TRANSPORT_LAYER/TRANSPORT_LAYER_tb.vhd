@@ -46,11 +46,15 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_tb IS
     signal BUSY : std_ulogic := '0';
     
     -- Clock period definitions
-    constant CLK_PERIOD : time := 10 ns; -- 100 Mhz
+    constant CLK_PERIOD         : time := 10 ns; -- 100 Mhz
+    constant CLK_PERIOD_REAL    : real := real(CLK_PERIOD / 1 ps) / real(1 ns / 1 ps);
     
 BEGIN
     
     TRANSPORT_LAYER_inst : entity work.TRANSPORT_LAYER
+        generic map (
+            CLK_IN_PERIOD   => CLK_PERIOD_REAL
+        )
         port map (
             CLK => CLK,
             RST => RST,
@@ -77,7 +81,11 @@ BEGIN
     -- Stimulus process
     stim_proc: process
         
-        procedure send_packet(packet_num : in natural; wait_for_idle : in boolean; set_send_packet : in boolean) is
+        procedure send_data_packet(
+            packet_num      : in natural;
+            wait_for_idle   : in boolean;
+            set_send_packet : in boolean)
+        is
         begin
             DIN_WR_EN   <= '1';
             for byte_i in 0 to 127 loop
@@ -94,14 +102,17 @@ BEGIN
             end if;
         end procedure;
         
-        procedure send_packet(packet_num : in natural; set_send_packet : in boolean) is
+        procedure send_data_packet(
+            packet_num  : in natural;
+            set_send_packet : in boolean)
+        is
         begin
-            send_packet(packet_num, true, true);
+            send_data_packet(packet_num, true, true);
         end procedure;
         
-        procedure send_packet(packet_num : in natural) is
+        procedure send_data_packet(packet_num : in natural) is
         begin
-            send_packet(packet_num, true);
+            send_data_packet(packet_num, true);
         end procedure;
         
         procedure receive_data_packet(packet_num : in natural) is
@@ -199,7 +210,7 @@ BEGIN
         -- test 2: send a packet and receive a resend request packet
         
         report "Starting test 2";
-        send_packet(0);
+        send_data_packet(0);
         receive_resend_request_packet(0);
         
         wait for 500 ns;
@@ -219,31 +230,21 @@ BEGIN
         receive_data_packet(8);
         receive_data_packet(3);
         receive_data_packet(6);
-        receive_data_packet(4);
-        receive_data_packet(7);
         receive_data_packet(1);
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
+        receive_data_packet(7);
+        receive_data_packet(4);
+        for i in 1 to 8 loop
+            wait_for_readout;
+        end loop;
         
         wait for 500 ns;
         
         -- test 5: receive 8 identical packets
         
         report "Starting test 5";
-        receive_data_packet(9);
-        receive_data_packet(9);
-        receive_data_packet(9);
-        receive_data_packet(9);
-        receive_data_packet(9);
-        receive_data_packet(9);
-        receive_data_packet(9);
-        receive_data_packet(9);
+        for i in 1 to 8 loop
+            receive_data_packet(9);
+        end loop;
         
         wait for 500 ns;
         
@@ -260,8 +261,8 @@ BEGIN
         -- test 7: send two 256 byte packets without pause
         
         report "Starting test 7";
-        send_packet(10, false);
-        send_packet(11);
+        send_data_packet(10, false);
+        send_data_packet(11);
         wait until falling_edge(BUSY);
         
         wait for 500 ns;
@@ -269,14 +270,14 @@ BEGIN
         -- test 8: send 1024 byte without setting SEND_PACKET='1' between each 256 byte block
         
         report "Starting test 8";
-        send_packet(12, false, false);
-        send_packet(13, false, false);
-        send_packet(14, false, false);
-        send_packet(15, false, false);
-        send_packet(16, false, false);
-        send_packet(17, false, false);
-        send_packet(18, false, false);
-        send_packet(19);
+        send_data_packet(12, false, false);
+        send_data_packet(13, false, false);
+        send_data_packet(14, false, false);
+        send_data_packet(15, false, false);
+        send_data_packet(16, false, false);
+        send_data_packet(17, false, false);
+        send_data_packet(18, false, false);
+        send_data_packet(19);
         wait until falling_edge(BUSY);
         
         wait for 500 ns;

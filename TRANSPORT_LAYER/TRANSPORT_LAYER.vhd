@@ -39,14 +39,16 @@
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.MATH_REAL.ALL;
 use IEEE.NUMERIC_STD.ALL;
 use work.TRANSPORT_LAYER_PKG.all;
 use work.help_funcs.all;
 
 entity TRANSPORT_LAYER is
     generic (
-        RESEND_TIMEOUT_CYCLES   : positive := 5_000_000; -- 100 ms
-        MAX_TIMEOUT_RESENDS     : positive := 10
+        CLK_IN_PERIOD       : real;
+        RESEND_TIMEOUT      : real := 200_000_000.0; -- 200 ms
+        MAX_TIMEOUT_RESENDS : positive := 10
     );
     port (
         CLK : in std_ulogic;
@@ -71,6 +73,8 @@ entity TRANSPORT_LAYER is
 end TRANSPORT_LAYER;
 
 architecture rtl of TRANSPORT_LAYER is
+    
+    constant RESEND_TIMEOUT_CYCLES  : positive := int(ceil(RESEND_TIMEOUT / CLK_IN_PERIOD));
     
     signal pending_resend_requests  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     signal resend_request_ack       : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
