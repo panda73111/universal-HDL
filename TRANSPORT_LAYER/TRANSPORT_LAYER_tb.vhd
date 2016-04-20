@@ -87,6 +87,7 @@ BEGIN
             set_send_packet : in boolean)
         is
         begin
+            report "Sending packet " & natural'image(packet_num);
             DIN_WR_EN   <= '1';
             for byte_i in 0 to 127 loop
                 DIN <= stdulv(packet_num mod 8, 3) & stdulv(byte_i mod 32, 5);
@@ -118,6 +119,7 @@ BEGIN
         procedure receive_data_packet(packet_num : in natural) is
             variable checksum   : std_ulogic_vector(7 downto 0) := x"00";
         begin
+            report "Receiving packet " & natural'image(packet_num);
             PACKET_IN_WR_EN <= '1';
             -- magic
             PACKET_IN   <= DATA_MAGIC;
@@ -144,25 +146,6 @@ BEGIN
             wait until rising_edge(CLK);
         end procedure;
         
-        procedure receive_resend_request_packet(packet_num : in natural) is
-            variable checksum   : std_ulogic_vector(7 downto 0) := x"00";
-        begin
-            PACKET_IN_WR_EN <= '1';
-            -- magic
-            PACKET_IN   <= RESEND_MAGIC;
-            wait until rising_edge(CLK);
-            checksum    := PACKET_IN;
-            -- packet number
-            PACKET_IN   <= stdulv(packet_num, 8);
-            wait until rising_edge(CLK);
-            checksum    := checksum+PACKET_IN;
-            -- checksum
-            PACKET_IN   <= checksum;
-            wait until rising_edge(CLK);
-            PACKET_IN_WR_EN <= '0';
-            wait until rising_edge(CLK);
-        end procedure;
-        
         procedure receive_acknowledge_packet(packet_num : in natural) is
             variable checksum   : std_ulogic_vector(7 downto 0) := x"00";
         begin
@@ -182,12 +165,13 @@ BEGIN
             wait until rising_edge(CLK);
         end procedure;
         
-        procedure wait_for_readout is
+        procedure wait_until_idle is
         begin
             if BUSY='0' then
                 wait until BUSY='1';
             end if;
             wait until falling_edge(BUSY);
+            report "Readout finished";
         end procedure;
         
     begin
@@ -203,28 +187,20 @@ BEGIN
         
         report "Starting test 1";
         receive_data_packet(0);
-        wait_for_readout;
+        wait_until_idle;
         
         wait for 500 ns;
         
-        -- test 2: send a packet and receive a resend request packet
+        -- test 2: receive an acknowledge packet for packet #0
         
         report "Starting test 2";
-        send_data_packet(0);
-        receive_resend_request_packet(0);
-        
-        wait for 500 ns;
-        
-        -- test 3: receive an acknowledge packet for packet #0
-        
-        report "Starting test 3";
         receive_acknowledge_packet(0);
         
         wait for 500 ns;
         
-        -- test 4: receive 8 packets in random order
+        -- test 3: receive 8 packets in random order
         
-        report "Starting test 4";
+        report "Starting test 3";
         receive_data_packet(2);
         receive_data_packet(5);
         receive_data_packet(8);
@@ -233,24 +209,24 @@ BEGIN
         receive_data_packet(1);
         receive_data_packet(7);
         receive_data_packet(4);
-        for i in 1 to 8 loop
-            wait_for_readout;
+        for i in 1 to 6 loop
+            wait_until_idle;
         end loop;
         
         wait for 500 ns;
         
-        -- test 5: receive 8 identical packets
+        -- test 4: receive 8 identical packets
         
-        report "Starting test 5";
+        report "Starting test 4";
         for i in 1 to 8 loop
             receive_data_packet(9);
         end loop;
         
         wait for 500 ns;
         
-        -- test 6: try sending an empty packet
+        -- test 5: try sending an empty packet
         
-        report "Starting test 6";
+        report "Starting test 5";
         SEND_PACKET <= '1';
         wait until rising_edge(CLK);
         SEND_PACKET <= '0';
@@ -258,18 +234,17 @@ BEGIN
         
         wait for 500 ns;
         
-        -- test 7: send two 256 byte packets without pause
+        -- test 6: send two 256 byte packets without pause
         
-        report "Starting test 7";
+        report "Starting test 6";
         send_data_packet(10, false);
         send_data_packet(11);
-        wait until falling_edge(BUSY);
         
         wait for 500 ns;
         
-        -- test 8: send 1024 byte without setting SEND_PACKET='1' between each 256 byte block
+        -- test 7: send 1024 byte without setting SEND_PACKET='1' between each 256 byte block
         
-        report "Starting test 8";
+        report "Starting test 7";
         send_data_packet(12, false, false);
         send_data_packet(13, false, false);
         send_data_packet(14, false, false);
@@ -278,7 +253,7 @@ BEGIN
         send_data_packet(17, false, false);
         send_data_packet(18, false, false);
         send_data_packet(19);
-        wait until falling_edge(BUSY);
+        wait_until_idle;
         
         wait for 500 ns;
         
