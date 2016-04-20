@@ -8,7 +8,6 @@ package TRANSPORT_LAYER_PKG is
     constant BUFFERED_PACKETS   : positive := 8;
     constant DATA_MAGIC         : std_ulogic_vector(7 downto 0) := x"65";
     constant ACK_MAGIC          : std_ulogic_vector(7 downto 0) := x"66";
-    constant RESEND_MAGIC       : std_ulogic_vector(7 downto 0) := x"67";
     
     type packet_record_type is record
         is_buffered : boolean;

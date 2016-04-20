@@ -76,9 +76,6 @@ architecture rtl of TRANSPORT_LAYER is
     
     constant RESEND_TIMEOUT_CYCLES  : positive := int(ceil(RESEND_TIMEOUT / CLK_IN_PERIOD));
     
-    signal pending_resend_requests  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-    signal resend_request_ack       : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-    
     signal pending_received_acks    : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     signal ack_received_ack         : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
@@ -112,9 +109,6 @@ begin
             DIN_WR_EN   => DIN_WR_EN,
             SEND_PACKET => SEND_PACKET,
             
-            PENDING_RESEND_REQUESTS => pending_resend_requests,
-            RESEND_REQUEST_ACK      => resend_request_ack,
-            
             PENDING_RECEIVED_ACKS   => pending_received_acks,
             ACK_RECEIVED_ACK        => ack_received_ack,
             
@@ -138,9 +132,6 @@ begin
             
             DOUT        => DOUT,
             DOUT_VALID  => DOUT_VALID,
-            
-            PENDING_RESEND_REQUESTS => pending_resend_requests,
-            RESEND_REQUEST_ACK      => resend_request_ack,
             
             PENDING_RECEIVED_ACKS   => pending_received_acks,
             ACK_RECEIVED_ACK        => ack_received_ack,

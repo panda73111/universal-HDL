@@ -33,9 +33,6 @@ entity TRANSPORT_LAYER_SENDER is
         DIN_WR_EN   : in std_ulogic;
         SEND_PACKET : in std_ulogic;
         
-        PENDING_RESEND_REQUESTS : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        RESEND_REQUEST_ACK      : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
-        
         PENDING_RECEIVED_ACKS   : in std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         ACK_RECEIVED_ACK        : out std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
         
@@ -81,8 +78,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         next_packet_number      : unsigned(7 downto 0);
         checksum                : std_ulogic_vector(7 downto 0);
         slots_sent              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
-        --- resend request and acknowledge handling ---
-        resend_request_ack      : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
+        --- acknowledge handling ---
         ack_received_ack        : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         ack_sent                : std_ulogic;
         --- packet buffer ---
@@ -106,8 +102,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         next_packet_number      => x"00",
         checksum                => x"00",
         slots_sent              => (others => '0'),
-        --- resend request and acknowledge handling ---
-        resend_request_ack      => (others => '0'),
+        --- and acknowledge handling ---
         ack_received_ack        => (others => '0'),
         ack_sent                => '0',
         --- packet buffer ---
@@ -189,10 +184,8 @@ begin
     PACKET_OUT_VALID    <= cur_reg.packet_out_valid;
     PACKET_OUT_END      <= cur_reg.packet_out_end;
     
-    RESEND_REQUEST_ACK  <= cur_reg.resend_request_ack;
     ACK_RECEIVED_ACK    <= cur_reg.ack_received_ack;
-    
-    ACK_SENT    <= cur_reg.ack_sent;
+    ACK_SENT            <= cur_reg.ack_sent;
     
     BUSY    <= '1' when cur_reg.state/=WAITING_FOR_DATA else '0';
     
@@ -237,8 +230,7 @@ begin
             
             pending_slots_to_send   <=
                 pending_slots_to_send or
-                pending_timeouts or
-                PENDING_RESEND_REQUESTS;
+                pending_timeouts;
             
             for i in BUFFERED_PACKETS-1 downto 0 loop
                 if cur_reg.slots_sent(i)='1' then
@@ -344,8 +336,8 @@ begin
     end process;
     
     stm_proc : process(RST, cur_reg, buf_dout, meta_dout, pending_timeouts, writing_slot,
-        pending_slots_to_send, PENDING_RESEND_REQUESTS, PENDING_RECEIVED_ACKS,
-        PENDING_ACK_TO_SEND, SEND_PACKET, DIN_WR_EN, PENDING_ACK_PACKET_NUMBER)
+        pending_slots_to_send, PENDING_RECEIVED_ACKS, PENDING_ACK_TO_SEND, SEND_PACKET,
+        DIN_WR_EN, PENDING_ACK_PACKET_NUMBER)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
         
@@ -394,7 +386,6 @@ begin
         r.packet_out_end        := '0';
         r.timeout_start         := (others => '0');
         r.timeout_rst           := (others => '0');
-        r.resend_request_ack    := (others => '0');
         r.ack_received_ack      := (others => '0');
         r.ack_sent              := '0';
         r.slots_sent            := (others => '0');
@@ -427,7 +418,6 @@ begin
                     if pending_slots_to_send(i)='1' then
                         r.slot                  := i;
                         r.buf_rd_addr           := stdulv(i, SLOT_BITS) & x"00";
-                        r.resend_request_ack    := (i => '1', others => '0');
                         r.slots_sent            := (i => '1', others => '0');
                         r.send_records_din.slot := i;
                     end if;
