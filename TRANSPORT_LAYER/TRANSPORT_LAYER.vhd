@@ -21,20 +21,17 @@
 --    2 | length | payload length (1 biased)    2 |checksum|
 --      +--------+                                +--------+
 --    3 |        |
---         data                               resend demand packet format:
---  n-1 |        |                                 7      0
---      +--------+                                +--------+
---    n |checksum|                              0 |01100111| resend demand packet magic number
---      +--------+                                +--------+
---                                              1 | number | ID of the packet to be resent
---                                                +--------+
---                                              2 |checksum|
---                                                +--------+
+--         data
+--  n-1 |        |
+--      +--------+
+--    n |checksum|
+--      +--------+
+--
 -- Additional Comments:
 --  A packet is sent when 256 bytes were written or less bytes were written and
 --  the SEND_PACKET input was set to high. It is not possible to send a packet
 --  not containing any data bytes. If an acknowledge for a sent packet is not
---  received within [RESEND_TIMEOUT_CYCLES] cycles, that packet is sent again.
+--  received within [RESEND_TIMEOUT] nanoseconds, that packet is sent again.
 --  This can occur up to [MAX_TIMEOUT_RESENDS] times.
 ----------------------------------------------------------------------------------
 library IEEE;
