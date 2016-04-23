@@ -31,7 +31,6 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     signal PACKET_IN        : std_ulogic_vector(7 downto 0) := x"00";
     signal PACKET_IN_WR_EN  : std_ulogic := '0';
     
-    signal RESEND_REQUEST_ACK   : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     signal ACK_RECEIVED_ACK     : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0) := (others => '0');
     
     signal ACK_SENT : std_ulogic := '0';
@@ -42,7 +41,6 @@ ARCHITECTURE behavior OF TRANSPORT_LAYER_RECEIVER_tb IS
     signal DOUT         : std_ulogic_vector(7 downto 0);
     signal DOUT_VALID   : std_ulogic;
     
-    signal PENDING_RESEND_REQUESTS  : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
     signal PENDING_RECEIVED_ACKS    : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
     
     signal PENDING_ACK_TO_SEND          : std_ulogic;
@@ -80,11 +78,8 @@ BEGIN
             DOUT        => DOUT,
             DOUT_VALID  => DOUT_VALID,
             
-            RESEND_REQUEST_ACK      => RESEND_REQUEST_ACK,
-            PENDING_RESEND_REQUESTS => PENDING_RESEND_REQUESTS,
-            
-            ACK_RECEIVED_ACK        => ACK_RECEIVED_ACK,
             PENDING_RECEIVED_ACKS   => PENDING_RECEIVED_ACKS,
+            ACK_RECEIVED_ACK        => ACK_RECEIVED_ACK,
             
             ACK_SENT                    => ACK_SENT,
             PENDING_ACK_TO_SEND         => PENDING_ACK_TO_SEND,
@@ -103,21 +98,14 @@ BEGIN
     begin
         if RST='1' then
             ACK_RECEIVED_ACK    <= (others => '0');
-            RESEND_REQUEST_ACK  <= (others => '0');
         elsif rising_edge(CLK) then
             ACK_RECEIVED_ACK    <= (others => '0');
-            RESEND_REQUEST_ACK  <= (others => '0');
             for i in BUFFERED_PACKETS-1 downto 0 loop
                 if PENDING_RECEIVED_ACKS(i)='1' then
                     -- remove the acknowledged packet from the virtual send buffer
                     packet_number   := int(send_meta_records(i).packet_number);
                     send_packet_records(packet_number)  <= (others => '0');
                     ACK_RECEIVED_ACK(i) <= '1';
-                end if;
-                if PENDING_RESEND_REQUESTS(i)='1' then
-                    packet_number   := int(send_meta_records(i).packet_number);
-                    report "Virtual sender got the resend request for packet number " & natural'image(packet_number);
-                    RESEND_REQUEST_ACK(i)   <= '1';
                 end if;
             end loop;
         end if;
@@ -129,6 +117,7 @@ BEGIN
         procedure receive_data_packet(packet_num : in natural) is
             variable checksum   : std_ulogic_vector(7 downto 0) := x"00";
         begin
+            report "Receiving packet " & natural'image(packet_num);
             PACKET_IN_WR_EN <= '1';
             -- magic
             PACKET_IN   <= DATA_MAGIC;
@@ -155,25 +144,6 @@ BEGIN
             wait until rising_edge(CLK);
         end procedure;
         
-        procedure receive_resend_request_packet(packet_num : in natural) is
-            variable checksum   : std_ulogic_vector(7 downto 0) := x"00";
-        begin
-            PACKET_IN_WR_EN <= '1';
-            -- magic
-            PACKET_IN   <= RESEND_MAGIC;
-            wait until rising_edge(CLK);
-            checksum    := PACKET_IN;
-            -- packet number
-            PACKET_IN   <= stdulv(packet_num, 8);
-            wait until rising_edge(CLK);
-            checksum    := checksum+PACKET_IN;
-            -- checksum
-            PACKET_IN   <= checksum;
-            wait until rising_edge(CLK);
-            PACKET_IN_WR_EN <= '0';
-            wait until rising_edge(CLK);
-        end procedure;
-        
         procedure receive_acknowledge_packet(packet_num : in natural) is
             variable checksum   : std_ulogic_vector(7 downto 0) := x"00";
         begin
@@ -193,12 +163,13 @@ BEGIN
             wait until rising_edge(CLK);
         end procedure;
         
-        procedure wait_for_readout is
+        procedure wait_until_idle is
         begin
             if BUSY='0' then
                 wait until BUSY='1';
             end if;
             wait until rising_edge(CLK) and BUSY='0';
+            report "idle";
         end procedure;
         
     begin
@@ -212,51 +183,40 @@ BEGIN
         
         report "Starting test 1";
         receive_data_packet(0);
-        wait_for_readout;
+        wait_until_idle;
         
         wait for 100 ns;
         
-        -- test 2: receive a resend request packet for packet #0
+        -- test 2: receive an acknowledge packet for packet #0
         
         report "Starting test 2";
-        receive_resend_request_packet(0);
-        
-        wait for 100 ns;
-        
-        -- test 3: receive an acknowledge packet for packet #0
-        
-        report "Starting test 3";
         receive_acknowledge_packet(0);
         
         wait for 100 ns;
         
-        -- test 4: receive another resend request packet for packet #0,
-        --         which was removed from the buffer
+        -- test 3: receive 8 packets in random order
         
-        report "Starting test 4";
-        receive_resend_request_packet(0);
-        
-        wait for 100 ns;
-        
-        -- test 5: receive 8 packets in random order
-        
-        report "Starting test 5";
+        report "Starting test 3";
         receive_data_packet(2);
         receive_data_packet(5);
         receive_data_packet(8);
         receive_data_packet(3);
         receive_data_packet(6);
-        receive_data_packet(4);
-        receive_data_packet(7);
         receive_data_packet(1);
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
-        wait_for_readout;
+        receive_data_packet(7);
+        receive_data_packet(4);
+        for i in 1 to 6 loop
+            wait_until_idle;
+        end loop;
+        
+        wait for 100 ns;
+        
+        -- test 4: receive 8 identical packets
+        
+        report "Starting test 4";
+        for i in 1 to 8 loop
+            receive_data_packet(9);
+        end loop;
         
         wait for 100 ns;
         

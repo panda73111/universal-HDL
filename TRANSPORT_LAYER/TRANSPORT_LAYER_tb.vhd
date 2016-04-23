@@ -171,7 +171,7 @@ BEGIN
                 wait until BUSY='1';
             end if;
             wait until falling_edge(BUSY);
-            report "Readout finished";
+            report "idle";
         end procedure;
         
     begin
