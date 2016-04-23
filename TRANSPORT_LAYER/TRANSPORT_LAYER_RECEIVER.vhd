@@ -56,6 +56,8 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         COMPARING_ACK_CHECKSUM
     );
     
+    type packet_number_list_type is array(0 to BUFFERED_PACKETS-1) of packet_number_type;
+    
     type reg_type is record
         state                       : state_type;
         packet_number               : packet_number_type;
@@ -116,6 +118,9 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     
     signal packet_meta_records  : packet_meta_records_type := packet_meta_records_type_def;
     signal meta_dout            : packet_meta_record_type := packet_meta_record_type_def;
+    
+    signal acceptable_numbers  : packet_number_list_type := (others => x"00");
+    signal is_number_acceptable : boolean := false;
     
     --- buffer readout ---
     
@@ -209,6 +214,19 @@ begin
             if cur_readout_reg.packet_rm_en='1' then
                 packet_meta_records(cur_readout_reg.slot)   <= packet_meta_record_type_def;
             end if;
+        end if;
+    end process;
+    
+    acceptable_number_proc : process(RST, CLK)
+    begin
+        if rising_edge(CLK) then
+            is_number_acceptable    <= false;
+            for i in 0 to BUFFERED_PACKETS-1 loop
+                acceptable_numbers(i)   <= cur_readout_reg.packet_number+i;
+                if acceptable_numbers(i)=cur_reg.packet_number then
+                    is_number_acceptable    <= true;
+                end if;
+            end loop;
         end if;
     end process;
     
@@ -338,7 +356,8 @@ begin
                 if PACKET_IN_WR_EN='1' then
                     if
                         cr.checksum=PACKET_IN and
-                        not recv_records_dout.is_buffered
+                        not recv_records_dout.is_buffered and
+                        is_number_acceptable
                     then
                         for i in BUFFERED_PACKETS-1 downto 0 loop
                             if cr.occupied_slots(i)='0' then
