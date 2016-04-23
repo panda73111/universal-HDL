@@ -75,7 +75,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         packet_out_end          : std_ulogic;
         slot                    : natural range 0 to BUFFERED_PACKETS-1;
         bytes_left_counter      : unsigned(8 downto 0);
-        next_packet_number      : unsigned(7 downto 0);
+        next_packet_number      : packet_number_type;
         checksum                : std_ulogic_vector(7 downto 0);
         slots_sent              : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         --- acknowledge handling ---
@@ -87,7 +87,7 @@ architecture rtl of TRANSPORT_LAYER_SENDER is
         timeout_start           : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         timeout_rst             : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         --- global packet records ---
-        send_records_index      : unsigned(7 downto 0);
+        send_records_index      : packet_number_type;
         send_records_din        : packet_record_type;
         send_records_wr_en      : std_ulogic;
     end record;

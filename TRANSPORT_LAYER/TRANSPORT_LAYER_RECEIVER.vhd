@@ -58,7 +58,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
     
     type reg_type is record
         state                       : state_type;
-        packet_number               : unsigned(7 downto 0);
+        packet_number               : packet_number_type;
         slot                        : natural range 0 to BUFFERED_PACKETS-1;
         bytes_left_counter          : unsigned(8 downto 0);
         checksum                    : std_ulogic_vector(7 downto 0);
@@ -68,12 +68,12 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         --- acknowledge handling ---
         pending_received_acks       : std_ulogic_vector(BUFFERED_PACKETS-1 downto 0);
         pending_ack_to_send         : std_ulogic;
-        pending_ack_packet_number   : unsigned(7 downto 0);
+        pending_ack_packet_number   : packet_number_type;
         --- packet buffer ---
         buf_wr_en                   : std_ulogic;
         buf_wr_addr                 : std_ulogic_vector(SLOT_BITS+7 downto 0);
         --- global packet records ---
-        records_index               : unsigned(7 downto 0);
+        records_index               : packet_number_type;
         recv_records_din            : packet_record_type;
         recv_records_wr_en          : std_ulogic;
         --- packet meta information records ---
@@ -131,7 +131,7 @@ architecture rtl of TRANSPORT_LAYER_RECEIVER is
         state               : readout_state_type;
         dout_valid          : std_ulogic;
         buf_rd_addr         : std_ulogic_vector(SLOT_BITS+7 downto 0);
-        packet_number       : unsigned(7 downto 0);
+        packet_number       : packet_number_type;
         bytes_left_to_read  : unsigned(8 downto 0);
         slot                : natural range 0 to BUFFERED_PACKETS-1;
         packet_rm_en        : std_ulogic;

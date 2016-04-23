@@ -9,6 +9,8 @@ package TRANSPORT_LAYER_PKG is
     constant DATA_MAGIC         : std_ulogic_vector(7 downto 0) := x"65";
     constant ACK_MAGIC          : std_ulogic_vector(7 downto 0) := x"66";
     
+    subtype packet_number_type is unsigned(7 downto 0);
+    
     type packet_record_type is record
         is_buffered : boolean;
         slot        : natural range 0 to BUFFERED_PACKETS-1;
@@ -34,7 +36,7 @@ package TRANSPORT_LAYER_PKG is
     --- packet meta information records, for resending packets ---
     
     type packet_meta_record_type is record
-        packet_number   : unsigned(7 downto 0);
+        packet_number   : packet_number_type;
         packet_length   : unsigned(7 downto 0);
     end record;
     
