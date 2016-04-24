@@ -257,6 +257,23 @@ BEGIN
         
         wait for 500 ns;
         
+        -- test 8: reset, send and receive a packet
+        
+        report "Starting test 8";
+        RST <= '1';
+        wait for 500 ns;
+        RST <= '0';
+        wait for 500 ns;
+        
+        send_data_packet(0);
+        wait_until_idle;
+        
+        wait for 500 ns;
+        
+        receive_data_packet(0);
+        
+        wait for 500 ns;
+        
         report "NONE. All tests finished successfully."
             severity FAILURE;
     end process;

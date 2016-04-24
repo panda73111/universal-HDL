@@ -223,6 +223,7 @@ begin
             writing_slot            <= 0;
             pending_slots_to_send   <= (others => '0');
             meta_wr_en              <= '0';
+            meta_din                <= packet_meta_record_type_def;
         elsif rising_edge(CLK) then
             used_slots(writing_slot)    <= '1';
             meta_wr_en                  <= '0';
