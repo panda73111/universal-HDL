@@ -24,7 +24,6 @@ entity test_spi_flash is
         BYTE_COUNT      : positive := 1024;
         INIT_FILE_PATH  : string := "";
         INIT_FILE_ADDR  : std_ulogic_vector(23 downto 0) := x"000000";
-        BUFFER_SIZE     : positive := 256;
         ERASE_TIME      : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
         PROGRAM_TIME    : time := 800 us;
         VERBOSE         : boolean := false
@@ -40,116 +39,26 @@ end test_spi_flash;
 architecture behavioral of test_spi_flash is
 
     constant VERBOSE_MCS_PARSER : boolean := VERBOSE;
-    
-    type buffer_type is
-        array(0 to BUFFER_SIZE-1) of
-        std_ulogic_vector(7 downto 0);
-    
-    shared variable mcs_list    : ll_item_pointer_type;
-    
-    shared variable buf : buffer_type := (others => x"00");
-    shared variable buffer_start_addr   : std_ulogic_vector(23 downto 0) := x"000000";
-    
-    shared variable write_cache     : ll_item_pointer_type := null;
-    shared variable byte_written    : boolean := false;
-
-    constant BUFFER_MASK    :
-        std_ulogic_vector(23 downto 0) :=
-        stdulv(2**log2(buffer_type'length)-1, 24);
-
-    procedure fill_buffer(
-            buf : out buffer_type
-    ) is
-        file f                  : TEXT;
-        variable mcs_address    : std_ulogic_vector(31 downto 0);
-        variable mcs_data       : std_ulogic_vector(7 downto 0);
-        variable mcs_valid      : boolean;
-    begin
-        assert not VERBOSE
-            report "Filling the buffer at 0x" & hstr(buffer_start_addr)
-            severity NOTE;
-
-        assert buffer_start_addr<BYTE_COUNT
-            report "The SPI flash is smaller than the requested address"
-            severity FAILURE;
-
-        buf := (others => x"00");
-
-        mcs_init;
-        mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE_MCS_PARSER);
-
-        read_loop : while mcs_valid loop
-
-            exit read_loop when mcs_address>=buffer_start_addr+BUFFER_SIZE;
-
-            if mcs_address>=buffer_start_addr then
-                
-                assert not VERBOSE
-                    report "0x" & hstr(mcs_address-buffer_start_addr) & " <= 0x" & hstr(mcs_data)
-                    severity NOTE;
-                
-                buf(int(mcs_address-buffer_start_addr)) := mcs_data;
-            end if;
-
-            mcs_read_byte(mcs_list, mcs_address, mcs_data, mcs_valid, VERBOSE_MCS_PARSER);
-
-        end loop;
-
-    end procedure;
 
     procedure read_flash(
-        buf     : inout buffer_type;
         addr    : in std_ulogic_vector(23 downto 0);
         data    : out std_ulogic_vector(7 downto 0)
     ) is
-        variable read_addr  : std_ulogic_vector(31 downto 0);
-        variable temp       : std_ulogic_vector(7 downto 0);
-        variable valid      : boolean;
     begin
-        valid       := true;
-        read_addr   := x"00000000";
-        
-        mcs_init;
-        
-        while valid and read_addr/=x"00" & addr loop
-            mcs_read_byte(write_cache, read_addr, temp, valid, VERBOSE_MCS_PARSER);
-        end loop;
-        
-        if not valid then
-            
-            if
-                addr<buffer_start_addr or
-                addr>=buffer_start_addr+BUFFER_SIZE
-            then
-                buffer_start_addr   := addr and not BUFFER_MASK;
-                fill_buffer(buf);
-            end if;
-            
-            temp    := buf(int(addr-buffer_start_addr));
-            
-        end if;
-        
-        data    := temp;
-
+        data    := x"00";
         assert not VERBOSE
-            report "Reading byte: 0x" & hstr(temp) & " at 0x" & hstr(addr)
+            report "Reading byte at 0x" & hstr(addr)
             severity NOTE;
     end procedure;
 
     procedure write_flash(
-        buf     : inout buffer_type;
         addr    : in std_ulogic_vector(23 downto 0);
         data    : in std_ulogic_vector(7 downto 0)
     ) is
-        variable write_addr : std_ulogic_vector(31 downto 0);
     begin
         assert not VERBOSE
             report "Writing byte: 0x" & hstr(data) & " at 0x" & hstr(addr)
             severity NOTE;
-        
-        write_addr  := x"00" & addr;
-        
-        mcs_write(write_cache, write_addr, data, VERBOSE_MCS_PARSER);
     end procedure;
 
 begin
@@ -220,7 +129,7 @@ begin
         procedure send_data_byte is
             variable data   : std_ulogic_vector(7 downto 0);
         begin
-            read_flash(buf, flash_addr, data);
+            read_flash(flash_addr, data);
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(C) or SN='1';
                 exit bit_loop when SN='1';
@@ -234,10 +143,6 @@ begin
             end if;
         end procedure;
     begin
-        mcs_init(INIT_FILE_PATH, mcs_list, VERBOSE);
-        buffer_start_addr   := x"000000";
-        fill_buffer(buf);
-
         flash_status    := x"00";
         main_loop : loop
             wait until rising_edge(C);
@@ -359,7 +264,7 @@ begin
                                 next main_loop;
                             end if;
                             if flash_status(1 downto 0)="10" then
-                                write_flash(buf, flash_addr, flash_data_byte);
+                                write_flash(flash_addr, flash_data_byte);
                                 flash_addr(15 downto 0)     := (flash_addr(15 downto 0)+1) mod BYTE_COUNT;
                             end if;
                             wait until rising_edge(C) or SN='1';
