@@ -58,7 +58,7 @@ BEGIN
             CLK_IN_PERIOD   => clk_period_real,
             CLK_OUT_MULT    => 2,
             CLK_OUT_DIV     => 5,
-            BUF_SIZE        => 2048
+            BUFFER_SIZE     => 2048
         )
         port map (
             CLK => clk,
@@ -496,8 +496,7 @@ BEGIN
             if i=888 or i=1234 then
                 -- wait until the write buffer is empty
                 wr_en   <= '0';
-                wait until falling_edge(busy);
-                wait for 100 ns;
+                wait for 10 ms;
                 wait until rising_edge(clk);
                 wr_en   <= '1';
             end if;

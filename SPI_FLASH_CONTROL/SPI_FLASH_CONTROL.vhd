@@ -529,7 +529,7 @@ begin
                 r.desel_tick_count  := reg_type_def.desel_tick_count;
                 r.addr_bit_index    := uns(23, 6);
                 r.data_bit_index    := uns(7, 3);
-                if more_bytes_to_send='1' then
+                if fifo_empty='0' then
                     r.state := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
                     if sector_transition then
                         r.state := ERASE_SEND_WRITE_ENABLE_COMMAND;
