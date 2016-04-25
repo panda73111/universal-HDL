@@ -106,9 +106,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         PROGRAM_READ_STATUS_REGISTER,
         PROGRAM_CHECK_WIP_BIT,
         PROGRAM_HOLD_DESELECT,
-        PROGRAM_EVAL_NEXT_STATE,
-        PROGRAM_NEXT_PAGE,
-        PROGRAM_NEXT_SECTOR
+        PROGRAM_EVAL_NEXT_STATE
     );
     
     type reg_type is record
@@ -529,22 +527,14 @@ begin
             when PROGRAM_EVAL_NEXT_STATE =>
                 r.desel_tick_count  := reg_type_def.desel_tick_count;
                 r.state             := WAIT_FOR_INPUT;
+                r.addr_bit_index    := uns(23, 6);
+                r.data_bit_index    := uns(7, 3);
                 if more_bytes_to_send='1' then
-                    r.state := PROGRAM_NEXT_PAGE;
+                    r.state := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
                     if sector_transition then
-                        r.state := PROGRAM_NEXT_SECTOR;
+                        r.state := ERASE_SEND_WRITE_ENABLE_COMMAND;
                     end if;
                 end if;
-            
-            when PROGRAM_NEXT_PAGE =>
-                r.addr_bit_index    := uns(23, 6);
-                r.data_bit_index    := uns(7, 3);
-                r.state             := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
-            
-            when PROGRAM_NEXT_SECTOR =>
-                r.addr_bit_index    := uns(23, 6);
-                r.data_bit_index    := uns(7, 3);
-                r.state             := ERASE_SEND_WRITE_ENABLE_COMMAND;
             
         end case;
         
