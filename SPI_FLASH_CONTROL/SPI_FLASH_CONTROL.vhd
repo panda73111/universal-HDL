@@ -38,6 +38,7 @@ entity SPI_FLASH_CONTROL is
         DIN     : in std_ulogic_vector(7 downto 0);
         RD_EN   : in std_ulogic;
         WR_EN   : in std_ulogic;
+        END_WR  : in std_ulogic;
         MISO    : in std_ulogic;
         
         DOUT    : out std_ulogic_vector(7 downto 0) := x"00";
@@ -270,7 +271,7 @@ begin
     end process;
     
     stm_proc : process(
-            RST, cur_reg, ADDR, MISO, fifo_empty, rd_en_sync, next_data_byte, more_bytes_to_send,
+            RST, cur_reg, ADDR, MISO, END_WR, fifo_empty, rd_en_sync, next_data_byte, more_bytes_to_send,
             page_transition, sector_transition, time_to_reselect, time_to_poll)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
@@ -526,7 +527,6 @@ begin
             
             when PROGRAM_EVAL_NEXT_STATE =>
                 r.desel_tick_count  := reg_type_def.desel_tick_count;
-                r.state             := WAIT_FOR_INPUT;
                 r.addr_bit_index    := uns(23, 6);
                 r.data_bit_index    := uns(7, 3);
                 if more_bytes_to_send='1' then
@@ -534,6 +534,8 @@ begin
                     if sector_transition then
                         r.state := ERASE_SEND_WRITE_ENABLE_COMMAND;
                     end if;
+                elsif END_WR='1' then
+                    r.state := WAIT_FOR_INPUT;
                 end if;
             
         end case;

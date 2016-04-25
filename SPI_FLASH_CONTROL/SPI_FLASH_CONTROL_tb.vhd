@@ -28,6 +28,7 @@ ARCHITECTURE behavior OF SPI_FLASH_CONTROL_tb IS
     signal din      : std_ulogic_vector(7 downto 0) := x"00";
     signal rd_en    : std_ulogic := '0';
     signal wr_en    : std_ulogic := '0';
+    signal end_wr   : std_ulogic := '0';
     signal bulk     : std_ulogic := '0';
     signal miso     : std_ulogic := '0';
     
@@ -67,6 +68,7 @@ BEGIN
             DIN     => din,
             RD_EN   => rd_en,
             WR_EN   => wr_en,
+            END_WR  => end_wr,
             MISO    => miso,
             
             DOUT    => dout,
@@ -394,7 +396,9 @@ BEGIN
         wr_en   <= '0';
         wait until rising_edge(clk);
         
+        end_wr  <= '1';
         wait until falling_edge(busy);
+        end_wr  <= '0';
         wait for 10 us;
         
         -- read one byte at address 0xABCD
@@ -430,7 +434,9 @@ BEGIN
         wr_en   <= '0';
         wait until rising_edge(clk);
         
+        end_wr  <= '1';
         wait until falling_edge(busy);
+        end_wr  <= '0';
         wait for 10 us;
         
         -- read 1024 bytes at address 0x060000
@@ -471,7 +477,37 @@ BEGIN
         wr_en   <= '0';
         wait until rising_edge(clk);
         
+        end_wr  <= '1';
         wait until falling_edge(busy);
+        end_wr  <= '0';
+        wait for 10 us;
+        
+        -- write 2048 bytes (8 bit counter) at address 0x5FC00, with buffer underrun
+        flash_addr  := x"05FC00";
+        report "---------------";
+        report "Starting test 5";
+        wait until rising_edge(clk);
+        addr    <= flash_addr;
+        wr_en   <= '1';
+        for i in 0 to 2048 loop
+            din <= stdulv(i mod 256, 8);
+            wait until rising_edge(clk);
+            
+            if i=888 or i=1234 then
+                -- wait until the write buffer is empty
+                wr_en   <= '0';
+                wait until falling_edge(busy);
+                wait for 100 ns;
+                wait until rising_edge(clk);
+                wr_en   <= '1';
+            end if;
+        end loop;
+        wr_en   <= '0';
+        wait until rising_edge(clk);
+        
+        end_wr  <= '1';
+        wait until falling_edge(busy);
+        end_wr  <= '0';
         wait for 10 us;
         report "NONE. All tests completed." severity failure;
     end process;
