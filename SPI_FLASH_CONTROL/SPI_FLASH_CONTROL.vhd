@@ -122,6 +122,7 @@ architecture rtl of SPI_FLASH_CONTROL is
         desel_tick_count    : unsigned(log2(DESELECT_HOLD_TICKS) downto 0);
         fifo_rd_en          : std_ulogic;
         cur_addr            : std_ulogic_vector(23 downto 0);
+        sector_transition   : boolean;
     end record;
     
     constant reg_type_def   : reg_type := (
@@ -136,7 +137,8 @@ architecture rtl of SPI_FLASH_CONTROL is
         poll_tick_count     => uns(STATUS_POLL_TICKS-2, log2(STATUS_POLL_TICKS)+1),
         desel_tick_count    => uns(DESELECT_HOLD_TICKS-2, log2(DESELECT_HOLD_TICKS)+1),
         fifo_rd_en          => '0',
-        cur_addr            => (others => '0')
+        cur_addr            => (others => '0'),
+        sector_transition   => false
     );
     
     signal cur_reg, next_reg    : reg_type := reg_type_def;
@@ -439,6 +441,7 @@ begin
             when SEND_DATA =>
                 r.mosi              := fifo_dout(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
+                r.sector_transition := sector_transition;
                 if cr.data_bit_index=1 then
                     if
                         not page_transition and
@@ -510,7 +513,7 @@ begin
                 r.data_bit_index    := uns(7, 3);
                 if fifo_empty='0' then
                     r.state := PROGRAM_SEND_WRITE_ENABLE_COMMAND;
-                    if sector_transition then
+                    if cr.sector_transition then
                         r.state := ERASE_SEND_WRITE_ENABLE_COMMAND;
                     end if;
                 elsif END_WR='1' then
