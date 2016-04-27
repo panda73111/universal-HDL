@@ -489,7 +489,7 @@ BEGIN
         wait until rising_edge(clk);
         addr    <= flash_addr;
         wr_en   <= '1';
-        for i in 0 to 2048 loop
+        for i in 1 to 2048 loop
             din <= stdulv(i mod 256, 8);
             wait until rising_edge(clk);
             

@@ -71,7 +71,6 @@ architecture rtl of SPI_FLASH_CONTROL is
     
     type state_type is (
         WAIT_FOR_INPUT,
-        POP_FIRST_BYTE,
         
         -- Read
         SEND_READ_COMMAND,
@@ -158,9 +157,6 @@ architecture rtl of SPI_FLASH_CONTROL is
     signal fifo_empty   : std_ulogic := '0';
     signal fifo_full    : std_ulogic := '0';
     signal fifo_count   : std_ulogic_vector(log2(BUFFER_SIZE) downto 0) := (others => '0');
-    
-    signal next_data_byte       : std_ulogic_vector(7 downto 0) := x"00";
-    signal more_bytes_to_send   : std_ulogic := '0';
     
     signal next_addr            : std_ulogic_vector(23 downto 0) := x"000000";
     
@@ -257,22 +253,9 @@ begin
             COUNT   => fifo_count
         );
     
-    byte_buffer_proc : process(clk_out)
-    begin
-        if rising_edge(clk_out) then
-            if cur_reg.fifo_rd_en='1' then
-                -- make sure the byte to send is available exactly
-                -- when the state machine needs it
-                -- (one more rd_en is needed)
-                next_data_byte      <= fifo_dout;
-                more_bytes_to_send  <= not fifo_empty;
-            end if;
-        end if;
-    end process;
-    
     stm_proc : process(
-            RST, cur_reg, ADDR, MISO, END_WR, fifo_empty, rd_en_sync, next_data_byte, more_bytes_to_send,
-            page_transition, sector_transition, time_to_reselect, time_to_poll)
+            RST, cur_reg, ADDR, MISO, END_WR, fifo_empty, rd_en_sync, page_transition,
+            sector_transition, time_to_reselect, time_to_poll)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -294,12 +277,8 @@ begin
                     r.state := SEND_READ_COMMAND;
                 end if;
                 if fifo_empty='0' then
-                    r.state := POP_FIRST_BYTE;
+                    r.state := ERASE_SEND_WRITE_ENABLE_COMMAND;
                 end if;
-            
-            when POP_FIRST_BYTE =>
-                r.fifo_rd_en    := '1';
-                r.state         := ERASE_SEND_WRITE_ENABLE_COMMAND;
             
             -- Read
             
@@ -458,7 +437,7 @@ begin
                 end if;
             
             when SEND_DATA =>
-                r.mosi              := next_data_byte(int(cr.data_bit_index));
+                r.mosi              := fifo_dout(int(cr.data_bit_index));
                 r.data_bit_index    := cr.data_bit_index-1;
                 if cr.data_bit_index=1 then
                     if
@@ -471,7 +450,7 @@ begin
                     r.wr_ack    := '1';
                     r.cur_addr  := cr.cur_addr+1;
                     if
-                        more_bytes_to_send='0' or
+                        fifo_empty='1' or
                         page_transition or
                         sector_transition
                     then
