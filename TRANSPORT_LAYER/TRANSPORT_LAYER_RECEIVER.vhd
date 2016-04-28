@@ -280,7 +280,7 @@ begin
         next_readout_reg    <= r;
     end process;
     
-    stm_proc : process(RST, cur_reg, cur_readout_reg, recv_records_dout,
+    stm_proc : process(RST, cur_reg, cur_readout_reg, recv_records_dout, is_number_acceptable,
         ACK_RECEIVED_ACK, ACK_SENT, PACKET_IN, PACKET_IN_WR_EN, SEND_RECORDS_DOUT)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
