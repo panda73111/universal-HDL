@@ -47,6 +47,7 @@ architecture rtl of ITERATIVE_MULTIPLIER is
         state       : state_type;
         valid       : std_ulogic;
         remainder   : unsigned(WIDTH-1 downto 0);
+        temp        : unsigned(2*WIDTH-1 downto 0);
         result      : unsigned(2*WIDTH-1 downto 0);
     end record;
     
@@ -54,6 +55,7 @@ architecture rtl of ITERATIVE_MULTIPLIER is
         state       => WAIT_FOR_START,
         valid       => '0',
         remainder   => (others => '0'),
+        temp        => (others => '0'),
         result      => (others => '0')
     );
     
@@ -75,7 +77,7 @@ begin
             
             when WAIT_FOR_START =>
                 r.remainder := (others => '0');
-                r.result    := (others => '0');
+                r.temp      := (others => '0');
                 if START='1' then
                     r.state := CHECK_FOR_FACTOR_ZERO;
                 end if;
@@ -92,14 +94,15 @@ begin
             when CALCULATE =>
                 if cr.remainder < MULTIPLIER then
                     r.remainder := cr.remainder+1;
-                    r.result    := cr.result+MULTIPLICAND;
+                    r.temp      := cr.temp+MULTIPLICAND;
                 else
                     r.state := FINISH;
                 end if;
             
             when FINISH =>
-                r.valid := '1';
-                r.state := WAIT_FOR_START;
+                r.valid     := '1';
+                r.result    := cr.temp;
+                r.state     := WAIT_FOR_START;
             
         end case;
         
