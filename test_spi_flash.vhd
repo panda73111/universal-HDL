@@ -16,8 +16,6 @@ use IEEE.NUMERIC_STD.ALL;
 use std.textio.all;
 use work.help_funcs.all;
 use work.txt_util.all;
-use work.mcs_parser.all;
-use work.linked_list.all;
 
 entity test_spi_flash is
     generic (
