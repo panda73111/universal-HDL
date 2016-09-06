@@ -34,8 +34,8 @@ ARCHITECTURE behavior OF VIDEO_ANALYZER_tb IS
     -- Outputs
     signal POSITIVE_VSYNC   : std_ulogic;
     signal POSITIVE_HSYNC   : std_ulogic;
-    signal WIDTH            : std_ulogic_vector(10 downto 0);
-    signal HEIGHT           : std_ulogic_vector(10 downto 0);
+    signal WIDTH            : std_ulogic_vector(15 downto 0);
+    signal HEIGHT           : std_ulogic_vector(15 downto 0);
     signal INTERLACED       : std_ulogic;
     signal VALID            : std_ulogic;
     
