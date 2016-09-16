@@ -30,7 +30,7 @@ ARCHITECTURE behavior OF UART_SENDER_tb IS
     signal wr_en    : std_ulogic := '0';
     signal cts      : std_ulogic := '0';
     
-    -- Outputs1
+    -- Outputs
     signal txd      : std_ulogic_vector(1 downto 0);
     signal full     : std_ulogic_vector(1 downto 0);
     signal busy     : std_ulogic_vector(1 downto 0);
