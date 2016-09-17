@@ -170,9 +170,13 @@ begin
             
             if scl_counter(scl_counter'high)='1' then
                 
-                scl_counter <= uns(SCL_STATE_TICKS-1, scl_counter'length);
-                scl_state   <= scl_state_type'succ(scl_state);
+                scl_counter <= uns(SCL_STATE_TICKS-2, scl_counter'length);
                 scl_event   <= true;
+                
+                scl_state   <= scl_state_type'succ(scl_state);
+                if scl_state=LOW then
+                    scl_state   <= RISING;
+                end if;
                 
                 if scl_state=RISING and scl_in_sync='0' then
                     -- clock stretch
@@ -184,7 +188,7 @@ begin
         end if;
     end process;
     
-    stm_proc : process(cur_reg, RST, sda_in_sync, scl_in_sync, RD_EN, scl_event, scl_state, fifo_empty, fifo_dout)
+    stm_proc : process(cur_reg, RST, sda_in_sync, scl_in_sync, RD_EN, ADDR, scl_event, scl_state, fifo_empty, fifo_dout)
         alias cr is cur_reg;
         variable r  : reg_type := reg_type_def;
     begin
@@ -367,7 +371,7 @@ begin
             
         end case;
         
-        if not scl_event and not r.active then
+        if not scl_event and not RD_EN='1' and fifo_empty='1' then
             r   := cur_reg;
         end if;
         
