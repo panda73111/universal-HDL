@@ -41,7 +41,7 @@ end TEST_FRAME_GEN;
 
 architecture rtl of TEST_FRAME_GEN is
     
-    constant MAX_BITS   : natural := max(R_BITS, max(G_BITS, B_BITS));
+    constant MAX_BITS   : natural := maximum(R_BITS, maximum(G_BITS, B_BITS));
     constant GRAD_LIMIT : natural := (2**MAX_BITS)-1; -- the highest possible brightness
     constant R_LOW      : natural := MAX_BITS-R_BITS; -- for scaling the highest brightness down to the
     constant G_LOW      : natural := MAX_BITS-G_BITS; --  maximum of the respective color channel
@@ -98,7 +98,7 @@ begin
     
     RGB_ENABLE  <= rgb_enable_q;
     
-    vp  <= video_profiles(nat(PROFILE));
+    vp  <= video_profiles(int(PROFILE));
     
     rst_stm <= RST or not pix_clk_locked;
     
@@ -153,11 +153,11 @@ begin
             if ANIMATED then
                 -- gains the maximum brightness from 0 to 1 from frame 0 to FRAME_STEP of that pattern
                 frame_perc  := (frame_count mod FRAME_STEP) * 100 / FRAME_STEP;
-                x_grad      := uns(((nat(x)*1000*frame_perc/100)/vp.width*GRAD_LIMIT)/1000, MAX_BITS+1);
-                y_grad      := uns(((nat(y)*1000*frame_perc/100)/vp.height*GRAD_LIMIT)/1000, MAX_BITS+1);
+                x_grad      := uns(((int(x)*1000*frame_perc/100)/vp.width*GRAD_LIMIT)/1000, MAX_BITS+1);
+                y_grad      := uns(((int(y)*1000*frame_perc/100)/vp.height*GRAD_LIMIT)/1000, MAX_BITS+1);
             else
-                x_grad  := uns(((nat(x)*1000)/vp.width*GRAD_LIMIT)/1000, MAX_BITS+1);
-                y_grad  := uns(((nat(y)*1000)/vp.height*GRAD_LIMIT)/1000, MAX_BITS+1);
+                x_grad  := uns(((int(x)*1000)/vp.width*GRAD_LIMIT)/1000, MAX_BITS+1);
+                y_grad  := uns(((int(y)*1000)/vp.height*GRAD_LIMIT)/1000, MAX_BITS+1);
             end if;
         end if;
         
