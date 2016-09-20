@@ -17,7 +17,7 @@ use work.help_funcs.all;
 
 ENTITY ITERATIVE_DIVIDER_tb IS
     generic (
-        WIDTH   : natural := 16
+        WIDTH   : positive := 16
     );
 END ITERATIVE_DIVIDER_tb;
 
@@ -35,7 +35,9 @@ ARCHITECTURE rtl OF ITERATIVE_DIVIDER_tb IS
     -- Outputs
     signal VALID    : std_ulogic;
     signal ERROR    : std_ulogic;
-    signal RESULT   : std_ulogic_vector(WIDTH-1 downto 0);
+    
+    signal QUOTIENT     : std_ulogic_vector(WIDTH-1 downto 0);
+    signal REMAINDER    : std_ulogic_vector(WIDTH-1 downto 0);
     
     constant CLK_PERIOD : time := 10 ns;
     
@@ -57,7 +59,8 @@ BEGIN
             VALID   => VALID,
             ERROR   => ERROR,
             
-            RESULT  => RESULT
+            QUOTIENT    => QUOTIENT,
+            REMAINDER   => REMAINDER
         );
     
     CLK <= not CLK after CLK_PERIOD/2;
@@ -67,8 +70,9 @@ BEGIN
         
         procedure division_test(
             constant l, r   : in natural;
-            constant expected_result : in natural;
-            constant expect_error   : in boolean
+            constant expected_quotient  : in natural;
+            constant expected_remainder : in natural;
+            constant expect_error       : in boolean
         ) is
             variable timeout    : natural;
         begin
@@ -78,7 +82,7 @@ BEGIN
             START       <= '1';
             wait until rising_edge(CLK);
             START   <= '0';
-            timeout := 2**WIDTH+10;
+            timeout := WIDTH+10;
             
             while timeout > 0 loop
                 if expect_error then
@@ -96,8 +100,11 @@ BEGIN
                         severity FAILURE;
                     
                     if VALID='1' then
-                        assert RESULT=stdulv(expected_result, WIDTH)
-                            report "Got wrong result!"
+                        assert QUOTIENT=stdulv(expected_quotient, WIDTH)
+                            report "Got wrong quotient!"
+                            severity FAILURE;
+                        assert REMAINDER=stdulv(expected_remainder, WIDTH)
+                            report "Got wrong remainder!"
                             severity FAILURE;
                         exit;
                     end if;
@@ -122,14 +129,14 @@ BEGIN
         
         -- insert stimulus here
         
-        division_test(   1,    1,    1, false);
-        division_test( 100,   10,   10, false);
-        division_test(  10,  100,    0, false);
-        division_test(2**WIDTH-1, 1, 2**WIDTH-1, false);
-        division_test(1000,   33,   30, false);
-        division_test(   1,    0,    0, true);
+        division_test(   1,         1,          1,   0, false);
+        division_test( 100,        10,         10,   0, false);
+        division_test(  10,       100,          0,  10, false);
+        division_test(2**WIDTH-1,   1, 2**WIDTH-1,   0, false);
+        division_test(1000,        33,         30,  10, false);
+        division_test(   1,         0,          0,   0, true);
         
-        wait for 10 us;
+        wait for 1 us;
         report "NONE. All tests finished successfully."
             severity FAILURE;
     end process;
