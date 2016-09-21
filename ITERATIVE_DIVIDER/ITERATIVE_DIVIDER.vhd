@@ -30,6 +30,7 @@ entity ITERATIVE_DIVIDER is
         DIVIDEND    : in std_ulogic_vector(WIDTH-1 downto 0);
         DIVISOR     : in std_ulogic_vector(WIDTH-1 downto 0);
         
+        BUSY    : out std_ulogic;
         VALID   : out std_ulogic;
         ERROR   : out std_ulogic;
         
@@ -78,6 +79,7 @@ architecture rtl of ITERATIVE_DIVIDER is
     
 begin
     
+    BUSY    <= '0' when cur_reg.state=WAITING_FOR_START else '1';
     VALID   <= cur_reg.valid;
     ERROR   <= cur_reg.error;
     
