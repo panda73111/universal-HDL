@@ -69,9 +69,6 @@ architecture rtl of ASYNC_FIFO_2CLK is
     
     signal cnt_next, cnt    : std_ulogic_vector(ADDR_BITS downto 0) := (others => '0');
     
-    attribute keep : boolean;
-    attribute keep of COUNT: signal is true;
-    
 begin
     
     FULL    <= is_full;
