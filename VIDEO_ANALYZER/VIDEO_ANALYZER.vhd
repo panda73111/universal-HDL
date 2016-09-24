@@ -17,6 +17,9 @@ use IEEE.NUMERIC_STD.ALL;
 use work.help_funcs.all;
 
 entity VIDEO_ANALYZER is
+    generic (
+        DIM_BITS    : positive range 8 to 16
+    );
     port (
         CLK : in std_ulogic;
         RST : in std_ulogic;
@@ -28,8 +31,8 @@ entity VIDEO_ANALYZER is
         
         POSITIVE_VSYNC  : out std_ulogic := '0';
         POSITIVE_HSYNC  : out std_ulogic := '0';
-        WIDTH           : out std_ulogic_vector(15 downto 0) := x"0000";
-        HEIGHT          : out std_ulogic_vector(15 downto 0) := x"0000";
+        WIDTH           : out std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
+        HEIGHT          : out std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
         INTERLACED      : out std_ulogic := '0';
         VALID           : out std_ulogic := '0'
     );
@@ -56,10 +59,10 @@ architecture rtl of VIDEO_ANALYZER is
         state       : state_type;
         vsync_pol   : std_ulogic;
         hsync_pol   : std_ulogic;
-        tmp_width   : unsigned(15 downto 0);
-        tmp_height  : unsigned(15 downto 0);
-        width       : unsigned(15 downto 0);
-        height      : unsigned(15 downto 0);
+        tmp_width   : unsigned(DIM_BITS-1 downto 0);
+        tmp_height  : unsigned(DIM_BITS-1 downto 0);
+        width       : unsigned(DIM_BITS-1 downto 0);
+        height      : unsigned(DIM_BITS-1 downto 0);
         interlaced  : std_ulogic;
         valid       : std_ulogic;
         first_run   : boolean;
@@ -69,10 +72,10 @@ architecture rtl of VIDEO_ANALYZER is
         state       => WAIT_FOR_START,
         vsync_pol   => '0',
         hsync_pol   => '0',
-        tmp_width   => x"0000",
-        tmp_height  => x"0000",
-        width       => x"0000",
-        height      => x"0000",
+        tmp_width   => (others => '0'),
+        tmp_height  => (others => '0'),
+        width       => (others => '0'),
+        height      => (others => '0'),
         interlaced  => '0',
         valid       => '0',
         first_run   => true

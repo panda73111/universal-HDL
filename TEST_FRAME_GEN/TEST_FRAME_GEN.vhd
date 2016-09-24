@@ -11,15 +11,14 @@ entity TEST_FRAME_GEN is
         ANIMATED                : boolean := false;
         -- SIMPLE_PATTERN=false should only be used for simulation or testing (excessive multiplication)!!
         SIMPLE_PATTERN          : boolean := true;
-        R_BITS                  : natural range 1 to 12 := 8;
-        G_BITS                  : natural range 1 to 12 := 8;
-        B_BITS                  : natural range 1 to 12 := 8;
+        R_BITS                  : positive range 5 to 12 := 8;
+        G_BITS                  : positive range 6 to 12 := 8;
+        B_BITS                  : positive range 5 to 12 := 8;
+        DIM_BITS                : positive range 8 to 16 := 11;
         DIF_FRAMES              : natural range 1 to 5 := 5; -- '1' means a white frame only
-        CLK_IN_TO_CLK10_MULT    : natural := 1;
-        CLK_IN_TO_CLK10_DIV     : natural := 2;
-        PROFILE_BITS            : natural := log2(VIDEO_PROFILE_COUNT);
-        X_BITS                  : natural := 11;
-        Y_BITS                  : natural := 11
+        CLK_IN_TO_CLK10_MULT    : positive := 1;
+        CLK_IN_TO_CLK10_DIV     : positive := 2;
+        PROFILE_BITS            : positive := log2(VIDEO_PROFILE_COUNT)
     );
     port (
         CLK_IN  : in std_ulogic;
@@ -67,8 +66,8 @@ architecture rtl of TEST_FRAME_GEN is
     signal frame_count  : natural range 0 to (FRAME_STEP+1)*DIF_FRAMES-1 := 0;
     signal vp           : video_profile_type;
     
-    signal x            : std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
-    signal y            : std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0');
+    signal x            : std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
+    signal y            : std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
     signal pos_vsync    : std_ulogic := '0';
     signal pos_vsync_q  : std_ulogic := '0';
     signal pos_hsync    : std_ulogic := '0';
@@ -108,8 +107,7 @@ begin
             CLK_IN_TO_CLK10_MULT    => CLK_IN_TO_CLK10_MULT,
             CLK_IN_TO_CLK10_DIV     => CLK_IN_TO_CLK10_DIV,
             PROFILE_BITS            => PROFILE_BITS,
-            X_BITS                  => X_BITS,
-            Y_BITS                  => Y_BITS
+            DIM_BITS                => DIM_BITS
         )
         port map (
             CLK_IN  => CLK_IN,

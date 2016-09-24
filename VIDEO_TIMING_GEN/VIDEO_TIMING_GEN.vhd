@@ -19,11 +19,10 @@ use work.video_profiles.all;
 entity VIDEO_TIMING_GEN is
     generic (
         CLK_IN_PERIOD           : real := 50.0;
-        CLK_IN_TO_CLK10_MULT    : natural := 1;
-        CLK_IN_TO_CLK10_DIV     : natural := 2;
-        PROFILE_BITS            : natural := log2(VIDEO_PROFILE_COUNT);
-        X_BITS                  : natural := 12;
-        Y_BITS                  : natural := 12
+        CLK_IN_TO_CLK10_MULT    : positive := 1;
+        CLK_IN_TO_CLK10_DIV     : positive := 2;
+        PROFILE_BITS            : positive := log2(VIDEO_PROFILE_COUNT);
+        DIM_BITS                : positive range 8 to 16 := 11
     );
     port (
         CLK_IN  : in std_ulogic;
@@ -38,11 +37,11 @@ entity VIDEO_TIMING_GEN is
         POS_HSYNC   : out std_ulogic := '0';
         VSYNC       : out std_ulogic := '0';
         HSYNC       : out std_ulogic := '0';
-        X           : out std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
-        Y           : out std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0');
+        X           : out std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
+        Y           : out std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
         RGB_ENABLE  : out std_ulogic := '0';
-        RGB_X       : out std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
-        RGB_Y       : out std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0')
+        RGB_X       : out std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
+        RGB_Y       : out std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0')
     );
 end VIDEO_TIMING_GEN;
 
@@ -57,8 +56,8 @@ architecture rtl of VIDEO_TIMING_GEN is
     
     type reg_type is record
         state               : state_type;
-        x                   : natural range 0 to 2**X_BITS-1;
-        y                   : natural range 0 to 2**Y_BITS-1;
+        x                   : natural range 0 to 2**DIM_BITS-1;
+        y                   : natural range 0 to 2**DIM_BITS-1;
         ver_rgb_enable      : std_ulogic;
         hor_rgb_enable      : std_ulogic;
         pos_vsync           : std_ulogic;
@@ -82,11 +81,11 @@ architecture rtl of VIDEO_TIMING_GEN is
     signal pix_clk  : std_ulogic := '0';
     
     signal vp               : video_profile_type;
-    signal total_ver_lines  : natural range 0 to 2**(Y_BITS+1)-1;
-    signal total_hor_pixels : natural range 0 to 2**(X_BITS+1)-1;
+    signal total_ver_lines  : natural range 0 to 2**(DIM_BITS+1)-1;
+    signal total_hor_pixels : natural range 0 to 2**(DIM_BITS+1)-1;
     signal clk_locked       : std_ulogic := '0';
-    signal x_q              : std_ulogic_vector(X_BITS-1 downto 0) := (others => '0');
-    signal y_q              : std_ulogic_vector(Y_BITS-1 downto 0) := (others => '0');
+    signal x_q              : std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
+    signal y_q              : std_ulogic_vector(DIM_BITS-1 downto 0) := (others => '0');
     
     signal cur_profile  : std_ulogic_vector(PROFILE_BITS-1 downto 0) := (others => '0');
     signal profile_set  : boolean := false;
@@ -95,8 +94,8 @@ architecture rtl of VIDEO_TIMING_GEN is
     signal reprog_en    : std_ulogic := '0';
     signal rst_stm      : std_ulogic := '1';
     
-    signal v_sync_end, v_rgb_start, v_rgb_end   : natural range 0 to 2**(Y_BITS+1)-1 := 0;
-    signal h_sync_end, h_rgb_start, h_rgb_end   : natural range 0 to 2**(X_BITS+1)-1 := 0;
+    signal v_sync_end, v_rgb_start, v_rgb_end   : natural range 0 to 2**(DIM_BITS+1)-1 := 0;
+    signal h_sync_end, h_rgb_start, h_rgb_end   : natural range 0 to 2**(DIM_BITS+1)-1 := 0;
     
 begin
     
@@ -261,8 +260,8 @@ begin
             cur_reg <= reg_type_def;
         elsif rising_edge(pix_clk) then
             cur_reg <= next_reg;
-            x_q     <= stdulv(cur_reg.x, X_BITS);
-            y_q     <= stdulv(cur_reg.y, Y_BITS);
+            x_q     <= stdulv(cur_reg.x, DIM_BITS);
+            y_q     <= stdulv(cur_reg.y, DIM_BITS);
         end if;
     end process;
     
