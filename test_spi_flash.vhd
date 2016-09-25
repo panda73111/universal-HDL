@@ -20,8 +20,6 @@ use work.txt_util.all;
 entity test_spi_flash is
     generic (
         BYTE_COUNT      : positive := 1024;
-        INIT_FILE_PATH  : string := "";
-        INIT_FILE_ADDR  : std_ulogic_vector(23 downto 0) := x"000000";
         ERASE_TIME      : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
         PROGRAM_TIME    : time := 800 us;
         VERBOSE         : boolean := false
