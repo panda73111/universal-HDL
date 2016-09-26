@@ -18,9 +18,9 @@ use work.video_profiles.all;
 
 entity VIDEO_TIMING_GEN is
     generic (
-        CLK_IN_PERIOD           : real := 50.0;
-        CLK_IN_TO_CLK10_MULT    : positive := 1;
-        CLK_IN_TO_CLK10_DIV     : positive := 2;
+        CLK_IN_PERIOD           : real;
+        CLK_IN_TO_CLK10_MULT    : positive;
+        CLK_IN_TO_CLK10_DIV     : positive;
         PROFILE_BITS            : positive := log2(VIDEO_PROFILE_COUNT);
         DIM_BITS                : positive range 8 to 16 := 11
     );
