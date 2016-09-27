@@ -22,7 +22,8 @@ entity VIDEO_TIMING_GEN is
         CLK_IN_TO_CLK10_MULT    : positive;
         CLK_IN_TO_CLK10_DIV     : positive;
         PROFILE_BITS            : positive := log2(VIDEO_PROFILE_COUNT);
-        DIM_BITS                : positive range 8 to 16 := 11
+        DIM_BITS                : positive range 8 to 16 := 11;
+        MOCK_CLK_MAN            : boolean := false
     );
     port (
         CLK_IN  : in std_ulogic;
@@ -133,23 +134,56 @@ begin
     
     rst_stm <= not clk_locked;
     
-    CLK_MAN_inst : entity work.CLK_MAN
-        generic map (
-            CLK_IN_PERIOD   => CLK_IN_PERIOD,
-            MULTIPLIER      => 2,
-            DIVISOR         => 2
-        )
-        port map (
-            CLK_IN  => CLK_IN,
-            RST     => RST,
+    not_mock_gen : if not MOCK_CLK_MAN generate
+        
+        CLK_MAN_inst : entity work.CLK_MAN
+            generic map (
+                CLK_IN_PERIOD   => CLK_IN_PERIOD,
+                MULTIPLIER      => 2,
+                DIVISOR         => 2
+            )
+            port map (
+                CLK_IN  => CLK_IN,
+                RST     => RST,
+                
+                REPROG_MULT => reprog_mult,
+                REPROG_DIV  => reprog_div,
+                REPROG_EN   => reprog_en,
+                
+                CLK_OUT => pix_clk,
+                LOCKED  => clk_locked
+            );
+        
+    end generate;
+    
+    mock_gen : if MOCK_CLK_MAN generate
+        
+        pix_clk_proc : process
+            variable half_period    : time;
+        begin
+            if reprog_en='1' or reprog_mult=0 or reprog_div=0 then
+                pix_clk <= '0';
+                wait until rising_edge(CLK_IN) and reprog_mult>0 and reprog_div>0;
+            end if;
             
-            REPROG_MULT => reprog_mult,
-            REPROG_DIV  => reprog_div,
-            REPROG_EN   => reprog_en,
+            half_period := 1 ns * CLK_IN_PERIOD * real(int(reprog_mult)) / real(int(reprog_div)) / 2.0;
             
-            CLK_OUT => pix_clk,
-            LOCKED  => clk_locked
-        );
+            pix_clk <= '1';
+            wait for half_period;
+            pix_clk <= '0';
+            wait for half_period;
+        end process;
+        
+        mock_proc : process
+        begin
+            clk_locked  <= '0';
+            wait for 100 ns;
+            wait until rising_edge(CLK_IN);
+            clk_locked  <= '1';
+            wait until rising_edge(CLK_IN) and reprog_en='1';
+        end process;
+        
+    end generate;
     
     dcm_reprog_proc : process(RST, CLK_IN)
     begin
