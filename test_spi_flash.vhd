@@ -35,13 +35,15 @@ end test_spi_flash;
 architecture behavioral of test_spi_flash is
 
     constant VERBOSE_MCS_PARSER : boolean := VERBOSE;
+    
+    signal counter  : unsigned(7 downto 0) := x"00";
 
     procedure read_flash(
         addr    : in std_ulogic_vector(23 downto 0);
         data    : out std_ulogic_vector(7 downto 0)
     ) is
     begin
-        data    := x"00";
+        data    := stdulv(counter); -- x"00";
         assert not VERBOSE
             report "Reading byte at 0x" & hstr(addr)
             severity NOTE;
@@ -126,6 +128,7 @@ begin
             variable data   : std_ulogic_vector(7 downto 0);
         begin
             read_flash(flash_addr, data);
+            counter <= counter+1;
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(C) or SN='1';
                 exit bit_loop when SN='1';
