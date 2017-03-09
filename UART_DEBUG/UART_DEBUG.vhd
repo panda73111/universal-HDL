@@ -18,6 +18,7 @@ use work.help_funcs.all;
 entity UART_DEBUG is
     generic (
         CLK_IN_PERIOD   : real;
+        BAUD_RATE       : positive := 115_200;
         STR_LEN         : positive := 128;
         PRINT_CRLF      : boolean := true
     );
@@ -55,7 +56,8 @@ begin
     
     UART_SENDER_inst : entity work.UART_SENDER
         generic map (
-            CLK_IN_PERIOD   => CLK_IN_PERIOD
+            CLK_IN_PERIOD   => CLK_IN_PERIOD,
+            BAUD_RATE       => BAUD_RATE
         )
         port map (
             CLK => CLK,
