@@ -122,7 +122,6 @@ package body txt_util is
             when 'L'    => c    := 'L';
             when 'H'    => c    := 'H';
             when '-'    => c    := '-';
-            when others => c    := '?';
         end case;
         return c;
     end function;
