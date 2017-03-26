@@ -21,6 +21,8 @@ END SPI_FLASH_CONTROL_tb;
 
 ARCHITECTURE behavior OF SPI_FLASH_CONTROL_tb IS
     
+    constant VERBOSE    : boolean := false;
+    
     -- Inputs
     signal clk      : std_ulogic := '0';
     signal rst      : std_ulogic := '0';
@@ -259,7 +261,9 @@ BEGIN
             if sn='0' then
                 
                 get_cmd;
-                report "Got command: 0x" & hstr(flash_cmd);
+                assert not VERBOSE
+                    report "Got command: 0x" & hstr(flash_cmd)
+                    severity NOTE;
                 
                 case flash_cmd is
                     
@@ -267,7 +271,9 @@ BEGIN
                         wait until rising_edge(c) or sn='1';
                         if sn='1' then
                             if flash_status(0)='0' then
-                                report "Setting WRITE ENABLE bit";
+                                assert not VERBOSE
+                                    report "Setting WRITE ENABLE bit"
+                                    severity NOTE;
                                 flash_status(1) := '1';
                             end if;
                         else
@@ -277,7 +283,9 @@ BEGIN
                     
                     when CMD_READ_STATUS_REGISTER =>
                         while sn='0' loop
-                            report "Sending status";
+                            assert not VERBOSE
+                                report "Sending status"
+                                severity NOTE;
                             send_status;
                             if sn='0' then
                                 wait until rising_edge(c) or sn='1';
@@ -291,7 +299,8 @@ BEGIN
                             flash_cmd/=CMD_SECTOR_ERASE and
                             flash_cmd/=CMD_PAGE_PROGRAM
                         then
-                            report "Unknown command: " & hstr(flash_cmd);
+                            report "Unknown command: " & hstr(flash_cmd)
+                                severity FAILURE;
                             if sn='0' then wait until sn='1'; end if;
                             next main_loop;
                         end if;
@@ -301,14 +310,18 @@ BEGIN
                 wait until rising_edge(c) or sn='1';
                 if sn='1' then next main_loop; end if;
                 get_addr;
-                report "Got address: 0x" & hstr(flash_addr, false);
+                assert not VERBOSE
+                    report "Got address: 0x" & hstr(flash_addr, false)
+                    severity NOTE;
                 
                 case flash_cmd is
                     
                     when CMD_READ_DATA_BYTES =>
                         if flash_status(0)='0' then
                             while sn='0' loop
-                                report "Reading byte: 0x" & hstr(flash_mem(int(flash_addr))) & " at 0x" & hstr(flash_addr, false);
+                                assert not VERBOSE
+                                    report "Reading byte: 0x" & hstr(flash_mem(int(flash_addr))) & " at 0x" & hstr(flash_addr, false)
+                                    severity NOTE;
                                 send_data_byte;
                                 flash_addr  := flash_addr+1;
                                 if sn='0' then
@@ -324,13 +337,15 @@ BEGIN
                         wait until rising_edge(c) or sn='1';
                         if sn='1' then
                             if flash_status(1 downto 0)="10" then
-                                report "Erasing sector: 0x" & hstr(flash_addr(23 downto 16) & x"0000", false);
+                                assert not VERBOSE
+                                    report "Erasing sector: 0x" & hstr(flash_addr(23 downto 16) & x"0000", false)
+                                    severity NOTE;
                             end if;
                             flash_status(1) := '0';
                         else
                             wait until sn='1';
                             report "Sector erase command not correctly finished!"
-                                severity WARNING;
+                                severity FAILURE;
                             next main_loop;
                         end if;
                         erasing             := true;
@@ -345,11 +360,13 @@ BEGIN
                             get_data_byte;
                             if sn='1' then
                                 report "Program command not correctly finished!"
-                                    severity WARNING;
+                                    severity FAILURE;
                                 next main_loop;
                             end if;
                             if flash_status(1 downto 0)="10" then
-                                report "Writing byte: 0x" & hstr(flash_data_byte) & " at 0x" & hstr(flash_addr, false);
+                                assert not VERBOSE
+                                    report "Writing byte: 0x" & hstr(flash_data_byte) & " at 0x" & hstr(flash_addr, false)
+                                    severity NOTE; 
                                 flash_mem(int(flash_addr))  <= flash_data_byte;
                                 flash_addr(7 downto 0)      := flash_addr(7 downto 0)+1;
                             end if;
@@ -485,7 +502,7 @@ BEGIN
         -- write 2048 bytes (8 bit counter) at address 0x5FC00, with buffer underrun
         flash_addr  := x"05FC00";
         report "---------------";
-        report "Starting test 5";
+        report "Starting test 6";
         wait until rising_edge(clk);
         addr    <= flash_addr;
         wr_en   <= '1';
