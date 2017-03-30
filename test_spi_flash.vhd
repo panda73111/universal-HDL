@@ -20,6 +20,8 @@ use work.txt_util.all;
 entity test_spi_flash is
     generic (
         BYTE_COUNT      : positive := 1024;
+        INIT_FILE_PATH  : string := "";
+        INIT_FILE_ADDR  : std_ulogic_vector(23 downto 0) := x"000000";
         ERASE_TIME      : time := 2 ms; -- more realistic erase time: 800 ms. Ain't nobody got time for that...
         PROGRAM_TIME    : time := 800 us;
         VERBOSE         : boolean := false
@@ -34,19 +36,38 @@ end test_spi_flash;
 
 architecture behavioral of test_spi_flash is
 
-    constant VERBOSE_MCS_PARSER : boolean := VERBOSE;
-    
-    signal counter  : unsigned(7 downto 0) := x"00";
-
     procedure read_flash(
         addr    : in std_ulogic_vector(23 downto 0);
         data    : out std_ulogic_vector(7 downto 0)
     ) is
+        type char_file is file of character;
+        file file_in            : char_file;
+        variable char_buffer    : character;
     begin
-        data    := stdulv(counter); -- x"00";
         assert not VERBOSE
             report "Reading byte at 0x" & hstr(addr)
             severity NOTE;
+        
+        data    := x"00";
+        
+        if INIT_FILE_PATH'length>0 and addr>=INIT_FILE_ADDR then
+            file_open(file_in, INIT_FILE_PATH,  read_mode);
+            
+            read_loop : for i in 0 to int(addr)-int(INIT_FILE_ADDR) loop
+            
+                if endfile(file_in) then
+                    char_buffer := NUL;
+                    exit read_loop;
+                end if;
+                
+                read(file_in, char_buffer);
+                
+            end loop;
+            
+            file_close(file_in);
+            
+            data    := stdulv(character'pos(char_buffer), 8);
+        end if;
     end procedure;
 
     procedure write_flash(
@@ -77,7 +98,7 @@ begin
         variable erase_start_time   : time;
         variable programming        : boolean;
         variable program_start_time : time;
-
+        
         procedure get_cmd is
         begin
             bit_loop : for i in 7 downto 1 loop
@@ -128,7 +149,6 @@ begin
             variable data   : std_ulogic_vector(7 downto 0);
         begin
             read_flash(flash_addr, data);
-            counter <= counter+1;
             bit_loop : for i in 7 downto 1 loop
                 wait until falling_edge(C) or SN='1';
                 exit bit_loop when SN='1';
