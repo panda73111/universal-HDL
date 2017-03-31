@@ -4,15 +4,16 @@ use IEEE.STD_LOGIC_1164.all;
 
 package video_profiles is
     
-    constant VIDEO_PROFILE_COUNT    : natural := 7;
+    constant VIDEO_PROFILE_COUNT    : natural := 8;
     
-    constant VIDEO_PROFILE_320_240p_60      : natural := 0;
-    constant VIDEO_PROFILE_640_480p_60      : natural := 1;
-    constant VIDEO_PROFILE_1024_768p_75     : natural := 2;
-    constant VIDEO_PROFILE_1280_720p_60     : natural := 3;
-    constant VIDEO_PROFILE_1920_1080p_30    : natural := 4;
-    constant VIDEO_PROFILE_1920_1080i_60    : natural := 5;
-    constant VIDEO_PROFILE_1920_1080p_60    : natural := 6;
+    constant VIDEO_PROFILE_160_120p_300     : natural := 0;
+    constant VIDEO_PROFILE_320_240p_60      : natural := 1;
+    constant VIDEO_PROFILE_640_480p_60      : natural := 2;
+    constant VIDEO_PROFILE_1024_768p_75     : natural := 3;
+    constant VIDEO_PROFILE_1280_720p_60     : natural := 4;
+    constant VIDEO_PROFILE_1920_1080p_30    : natural := 5;
+    constant VIDEO_PROFILE_1920_1080i_60    : natural := 6;
+    constant VIDEO_PROFILE_1920_1080p_60    : natural := 7;
     
     type video_profile_type is record
         width           : natural;
@@ -36,7 +37,23 @@ package video_profiles is
         of video_profile_type;
     
     constant VIDEO_PROFILES : video_profiles_type := (
-        0 => ( -- 320x240p, 60Hz
+        0 => ( -- 160x120p, 300Hz
+            width           => 160,
+            height          => 120,
+            pixel_period    => 100 ns,
+            clk10_mult      => 2, -- 10 Mhz
+            clk10_div       => 2,
+            interlaced      => false,
+            negative_vsync  => true,
+            negative_hsync  => true,
+            h_front_porch   => 20,
+            h_back_porch    => 20,
+            h_sync_cycles   => 20,
+            v_front_porch   => 10,
+            v_back_porch    => 10,
+            v_sync_lines    => 5
+        ),
+        1 => ( -- 320x240p, 60Hz
             width           => 320,
             height          => 240,
             pixel_period    => 133.3 ns,
@@ -52,7 +69,7 @@ package video_profiles is
             v_back_porch    => 18,
             v_sync_lines    => 6
         ),
-        1 => ( -- 640x480p, 60Hz
+        2 => ( -- 640x480p, 60Hz
             width           => 640,
             height          => 480,
             pixel_period    => 39.7 ns,
@@ -68,7 +85,7 @@ package video_profiles is
             v_back_porch    => 33,
             v_sync_lines    => 2
         ),
-        2 => ( -- 1024x768p, 75Hz
+        3 => ( -- 1024x768p, 75Hz
             width           => 1024,
             height          => 768,
             pixel_period    => 12.7 ns,
@@ -84,7 +101,7 @@ package video_profiles is
             v_back_porch    => 28,
             v_sync_lines    => 3
         ),
-        3 => ( -- 1280x720p, 60Hz
+        4 => ( -- 1280x720p, 60Hz
             width           => 1280,
             height          => 720,
             pixel_period    => 13.5 ns,
@@ -100,7 +117,7 @@ package video_profiles is
             v_back_porch    => 20,
             v_sync_lines    => 5
         ),
-        4 => ( -- 1920x1080p, 30Hz
+        5 => ( -- 1920x1080p, 30Hz
             width           => 1920,
             height          => 1080,
             pixel_period    => 13.5 ns,
@@ -116,7 +133,7 @@ package video_profiles is
             v_back_porch    => 4,
             v_sync_lines    => 5
         ),
-        5 => ( -- 1920x1080i, 60Hz
+        6 => ( -- 1920x1080i, 60Hz
             width           => 1920,
             height          => 540,
             pixel_period    => 13.5 ns,
@@ -132,7 +149,7 @@ package video_profiles is
             v_back_porch    => 15,
             v_sync_lines    => 5
         ),
-        6 => ( -- 1920x1080p, 60Hz
+        7 => ( -- 1920x1080p, 60Hz
             width           => 1920,
             height          => 1080,
             pixel_period    => 6.7 ns,
